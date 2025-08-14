@@ -1,0 +1,14 @@
+requests
+fastapi
+uvicorn
+python-dotenv
+pydantic
+confluent-kafka
+redis[hiredis]
+fastapi-csrf-protect
+slowapi
+authlib
+bcrypt
+pyotp
+boto3
+sqlalchemy
