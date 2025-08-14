@@ -39,7 +39,7 @@ class UserPreferences(Base):
     theme = Column(String,nullable=False) # "light", "dark", "gray"
 
 
-class Database:
+class RDS:
     def __init__(self):
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         Base.metadata.create_all(bind=engine)
@@ -284,7 +284,7 @@ class Database:
         finally:
             db.close()
 
-    def login_after_successful_2fa(self, username_or_email: str) -> int | bool:
+    def login_after_successful_2fa(self, username_or_email: str) -> int | bool: # in the route, call update_user to change the last login at to the current datetime
         db = self.SessionLocal()
 
         try:

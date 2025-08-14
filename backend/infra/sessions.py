@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 env = os.getenv
 
-class RedisSession:
+class Redis:
     def __init__(self):
         self.redis_client = redis.Redis(
             host=env("REDIS_HOST"),
