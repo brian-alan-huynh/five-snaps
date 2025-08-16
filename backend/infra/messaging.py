@@ -33,7 +33,6 @@ kafka_consumer = Consumer({
 })
 
 kafka_consumer.subscribe([
-    "s3.upload_snap",
     "s3.delete_snap",
     "redis.add_new_session",
     "redis.delete_session",
@@ -57,19 +56,6 @@ def process_batch(messages: list):
             operation = record_msg.get("operation")
         
             match operation:
-                case "upload_snap":
-                    s3_key = record_msg["s3_key"]
-                    file_content = bytes.fromhex(record_msg["file_content"])
-                    content_type = record_msg["content_type"]
-                
-                    S3_CLIENT.put_object(
-                        Bucket=BUCKET_NAME,
-                        Key=s3_key,
-                        Body=file_content,
-                        ContentType=content_type,
-                        ACL='public-read'
-                    )
-
                 case "delete_snap":
                     s3_key = record_msg["s3_key"]
                     
@@ -92,7 +78,6 @@ def process_batch(messages: list):
                     
                 case "delete_session":
                     session_key = record_msg["session_key"]
-                    
                     REDIS_CLIENT.delete(session_key)
                     
                 case "add_img_tags":

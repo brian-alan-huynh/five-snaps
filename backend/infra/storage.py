@@ -22,29 +22,23 @@ class S3:
         return f"{user_id}/snap/{timestamp}_{unique_id}{file_extension}"
 
     @classmethod
-    async def upload_snap(cls, user_id: int, file: UploadFile) -> bool:
+    async def upload_snap(cls, user_id: int, img_file: UploadFile) -> bool:
         try:
-            file_extension = os.path.splitext(file.filename)[1].lower()
+            file_extension = os.path.splitext(img_file.filename)[1].lower()
             
             if file_extension not in [".jpg", ".jpeg", ".png", ".gif"]:
                 return False
                 
-            s3_key = cls._generate_s3_key(user_id, file.filename)
-            file_content = await file.read()
+            s3_key = cls._generate_s3_key(user_id, img_file.filename)
+            img_content = await img_file.read()
             
-            message = {
-                "operation": "upload_snap",
-                "s3_key": s3_key,
-                "file_content": file_content.hex(),
-                "content_type": file.content_type,
-            }
-            
-            kafka_producer.produce(
-                topic="s3.upload_snap",
-                value=json.dumps(message).encode("utf-8"),
+            S3_CLIENT.put_object(
+                Bucket=BUCKET_NAME,
+                Key=s3_key,
+                Body=img_content,
+                ContentType=img_file.content_type,
+                ACL='public-read',
             )
-            
-            kafka_producer.flush()
             
             return True
         
