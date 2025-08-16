@@ -1,15 +1,15 @@
 import os
-from typing import Final
 
 import boto3
 import redis
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv()
 env = os.getenv
 
 # Redis
-REDIS_CLIENT: Final[redis.Redis] = redis.Redis(
+REDIS_CLIENT = redis.Redis(
     host=env("REDIS_HOST"),
     port=int(env("REDIS_PORT")),
     decode_responses=True,
@@ -18,13 +18,18 @@ REDIS_CLIENT: Final[redis.Redis] = redis.Redis(
 )
 
 # S3
-S3_CLIENT: Final[boto3.client] = boto3.client(
+S3_CLIENT = boto3.client(
     "s3",
     aws_access_key_id=env("AWS_S3_ACCESS_KEY_ID"),
     aws_secret_access_key=env("AWS_S3_SECRET_ACCESS_KEY"),
     region_name=env("AWS_S3_REGION")
 )
 
-BUCKET_NAME: Final[str] = env("AWS_S3_BUCKET_NAME")
+BUCKET_NAME = env("AWS_S3_BUCKET_NAME")
+
+# MongoDB
+MONGO_CLIENT = MongoClient(env("MONGO_CONNECTION_STRING"))
+MONGO_CLIENT_DB = MONGO_CLIENT[env("MONGO_DB_NAME")]
+MONGO_COLLECTION = MONGO_CLIENT_DB[env("MONGO_COLLECTION_NAME")]
 
 # write kafka config for facebook post uploads
