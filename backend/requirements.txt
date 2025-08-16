@@ -12,3 +12,4 @@ bcrypt
 pyotp
 boto3
 sqlalchemy
+pymongo
