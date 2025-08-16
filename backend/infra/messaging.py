@@ -5,7 +5,7 @@ import time
 from confluent_kafka import Producer, Consumer
 from dotenv import load_dotenv
 
-from ..config import S3_CLIENT, BUCKET_NAME
+from ..config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT
 
 load_dotenv()
 env = os.getenv
@@ -33,8 +33,10 @@ kafka_consumer = Consumer({
 })
 
 kafka_consumer.subscribe([
-    "s3.upload_pfp",
-    "s3.delete_pfp",
+    "s3.upload_snap",
+    "s3.delete_snap",
+    "redis.add_new_session",
+    "redis.delete_session",
 ])
 
 BATCH_SIZE = 100
@@ -54,7 +56,7 @@ def process_batch(messages: list):
             operation = record_msg.get("operation")
         
             match operation:
-                case "upload_pfp":
+                case "upload_snap":
                     s3_key = record_msg["s3_key"]
                     file_content = bytes.fromhex(record_msg["file_content"])
                     content_type = record_msg["content_type"]
@@ -67,13 +69,30 @@ def process_batch(messages: list):
                         ACL='public-read'
                     )
 
-                case "delete_pfp":
+                case "delete_snap":
                     s3_key = record_msg["s3_key"]
                     
                     S3_CLIENT.delete_object(
                         Bucket=BUCKET_NAME,
                         Key=s3_key
                     )
+                
+                case "add_new_session":
+                    session_key = record_msg["session_key"]
+                    user_id = record_msg["user_id"]
+                    oauth_access_token = record_msg["oauth_access_token"]
+                    created_at = record_msg["created_at"]
+                    
+                    REDIS_CLIENT.hset(session_key, mapping={
+                        "user_id": user_id,
+                        "oauth_access_token": oauth_access_token,
+                        "created_at": created_at,
+                    })
+                    
+                case "delete_session":
+                    session_key = record_msg["session_key"]
+                    
+                    REDIS_CLIENT.delete(session_key)
                     
                 case _:
                     # Once backend is completed, add log here
