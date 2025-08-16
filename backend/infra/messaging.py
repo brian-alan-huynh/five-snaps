@@ -5,7 +5,7 @@ import time
 from confluent_kafka import Producer, Consumer
 from dotenv import load_dotenv
 
-from ..config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT
+from ..config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
 
 load_dotenv()
 env = os.getenv
@@ -37,6 +37,7 @@ kafka_consumer.subscribe([
     "s3.delete_snap",
     "redis.add_new_session",
     "redis.delete_session",
+    "mongodb.add_img_tags",
 ])
 
 BATCH_SIZE = 100
@@ -93,6 +94,17 @@ def process_batch(messages: list):
                     session_key = record_msg["session_key"]
                     
                     REDIS_CLIENT.delete(session_key)
+                    
+                case "add_img_tags":
+                    user_id = record_msg["user_id"]
+                    tags = record_msg["tags"]
+                    created_at = record_msg["created_at"]
+                    
+                    MONGO_COLLECTION.insert_one({
+                        "user_id": user_id,
+                        "tags": tags,
+                        "created_at": created_at,
+                    })
                     
                 case _:
                     # Once backend is completed, add log here
