@@ -19,14 +19,13 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
+    id = Column(Integer, primary_key=True, index=True) # Used to identify users logged in via local account
+    username = Column(String, unique=True, index=True, nullable=True) # Nullable for OAuth users
     password = Column(String, nullable=True) # Nullable for OAuth users
-    email = Column(String, nullable=False, unique=True, index=True)
+    email = Column(String, nullable=True, unique=True, index=True) # Nullable for OAuth users
     first_name = Column(String, nullable=False)
     oauth_provider = Column(String, nullable=True) # "google", "facebook", "apple"
-    oauth_provider_user_id = Column(String, nullable=True, unique=True)
-    oauth_provider_user_access_token = Column(String, nullable=True, unique=True)
+    oauth_provider_user_id = Column(String, nullable=True, unique=True) # Used to identify users logged in via OAuth
     created_at = Column(DateTime, default=datetime.now(), nullable=False)
     last_login_at = Column(DateTime, default=datetime.now(), nullable=False)
 
@@ -46,14 +45,13 @@ class RDS:
 
     # User table
     def create_user(
-            self, 
-            username: str, 
-            email: str,
+            self,
             first_name: str,
+            username: Optional[str] = None, 
+            password: Optional[str] = None, 
+            email: Optional[str] = None,
             oauth_provider: Optional[str] = None,
             oauth_provider_user_id: Optional[str] = None,
-            oauth_provider_user_access_token: Optional[str] = None,
-            password: Optional[str] = None, 
         ) -> int | bool:
 
         db = self.SessionLocal()
@@ -62,15 +60,22 @@ class RDS:
             if password:
                 password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-            db_user = User(
-                username=username, 
-                password=password,
-                email=email, 
-                first_name=first_name,
-                oauth_provider=oauth_provider,
-                oauth_provider_user_id=oauth_provider_user_id,
-                oauth_provider_user_access_token=oauth_provider_user_access_token
-            )
+            db_user = None
+            
+            if username and password:
+                db_user = User(
+                    username=username, 
+                    password=password,
+                    email=email, 
+                    first_name=first_name,
+                )
+            
+            if oauth_provider and oauth_provider_user_id:
+                db_user = User(
+                    first_name=first_name,
+                    oauth_provider=oauth_provider,
+                    oauth_provider_user_id=oauth_provider_user_id,
+                )
 
             db.add(db_user)
             db.commit()
@@ -95,12 +100,12 @@ class RDS:
                 return False
 
             return {
+                "account_type": "local" if db_user.username else "oauth",
                 "username": db_user.username,
                 "email": db_user.email,
                 "first_name": db_user.first_name,
                 "oauth_provider": db_user.oauth_provider,
                 "oauth_provider_user_id": db_user.oauth_provider_user_id,
-                "oauth_provider_user_access_token": db_user.oauth_provider_user_access_token,
                 "created_at": str(db_user.created_at),
                 "last_login_at": str(db_user.last_login_at),
             }
@@ -118,7 +123,6 @@ class RDS:
             password: Optional[str] = None, 
             email: Optional[str] = None, 
             first_name: Optional[str] = None,
-            last_login_at: Optional[datetime] = None,
         ) -> bool:
 
         db = self.SessionLocal()
@@ -137,8 +141,6 @@ class RDS:
                 db_user.email = email
             if first_name:
                 db_user.first_name = first_name
-            if last_login_at:
-                db_user.last_login_at = last_login_at
 
             db.commit()
             db.refresh(db_user)
@@ -260,45 +262,48 @@ class RDS:
         finally:
             db.close()
 
-    # Authentication (for local accounts)
-    def check_login_credentials(self, username_or_email: str, password: str) -> bool:
+    # Authentication
+    def check_login_creds(
+        self, 
+        username_or_email: Optional[str] = None, 
+        password: Optional[str] = None,
+        oauth_user_id: Optional[str] = None,
+        after_successful_2fa_or_oauth: bool = False,
+    ) -> bool | int:
+        
         db = self.SessionLocal()
 
         try:
-            db_user = db.query(User).filter(User.username == username_or_email).first()
+            db_user = None
 
-            if not db_user:
-                db_user = db.query(User).filter(User.email == username_or_email).first()
+            if username_or_email and password:
+                db_user = db.query(User).filter(User.username == username_or_email).first()
 
-            if not db_user:
-                return False
+                if not db_user:
+                    db_user = db.query(User).filter(User.email == username_or_email).first()
 
-            if not bcrypt.checkpw(password.encode("utf-8"), db_user.password.encode("utf-8")):
-                return False
+                if not db_user:
+                    return False
 
-            return True
+                if not bcrypt.checkpw(password.encode("utf-8"), db_user.password.encode("utf-8")):
+                    return False
 
-        except Exception:
-            return False
+            if oauth_user_id:
+                db_user = db.query(User).filter(User.oauth_provider_user_id == oauth_user_id).first()
 
-        finally:
-            db.close()
+                if not db_user:
+                    return False
 
-    def login_after_successful_2fa(self, username_or_email: str) -> int | bool: # in the route, call update_user to change the last login at to the current datetime
-        db = self.SessionLocal()
+            if not after_successful_2fa_or_oauth:
+                return True
+            
+            else:
+                db_user.last_login_at = datetime.now()
 
-        try:
-            db_user = db.query(User).filter(User.username == username_or_email).first()
+                db.commit()
+                db.refresh(db_user)
 
-            if not db_user:
-                db_user = db.query(User).filter(User.email == username_or_email).first()
-
-            db_user.last_login_at = datetime.now()
-
-            db.commit()
-            db.refresh(db_user)
-
-            return db_user.id
+                return db_user.id
 
         except Exception:
             db.rollback()
