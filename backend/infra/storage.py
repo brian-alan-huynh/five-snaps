@@ -22,7 +22,7 @@ class S3:
         return f"{user_id}/snap/{timestamp}_{unique_id}{file_extension}"
 
     @classmethod
-    async def upload_snap(cls, user_id: int, file: UploadFile) -> bool:
+    async def upload_snap(cls, user_id: int, file: UploadFile) -> str | bool:
         try:
             file_extension = os.path.splitext(file.filename)[1].lower()
             
@@ -46,7 +46,7 @@ class S3:
             
             kafka_producer.flush()
             
-            return True
+            return s3_key
         
         except ClientError:
             return False
