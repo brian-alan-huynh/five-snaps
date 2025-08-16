@@ -59,7 +59,7 @@ class S3:
             if "Contents" not in response:
                 return False
             
-            return [
+            snaps = [
                 {
                     "img_url": f"https://{BUCKET_NAME}.s3.{env("AWS_S3_REGION")}.amazonaws.com/{obj["Key"]}",
                     "created_at": obj["LastModified"],
@@ -69,6 +69,8 @@ class S3:
                 for obj in response["Contents"]
             ]
             
+            return sorted(snaps, key=lambda x: x["created_at"], reverse=True)
+        
         except ClientError:
             return False
 

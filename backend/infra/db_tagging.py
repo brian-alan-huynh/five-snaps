@@ -30,7 +30,8 @@ class MongoDB:
     @staticmethod
     def read_img_tags(user_id: int) -> list[dict[str, str | datetime]] | bool:
         try:
-            return MONGO_COLLECTION.find({ "user_id": user_id }) # once fetched, sorted() this list and the snaps list by date from latest to oldest; zip them together
+            img_tags = list(MONGO_COLLECTION.find({ "user_id": user_id }).sort("created_at", -1))
+            return img_tags
         
         except Exception:
             return False
