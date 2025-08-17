@@ -45,6 +45,8 @@ BATCH_SIZE = 100
 REQ_PER_SECOND = 200
 SECONDS_PER_BATCH = BATCH_SIZE / REQ_PER_SECOND
 
+stop_event = None
+
 def process_batch(messages: list):
     success_messages = []
     
@@ -124,8 +126,11 @@ def process_batch(messages: list):
         
     return True if success_messages else False
 
-def run_consumer():
-    while True:
+def run_consumer(event):
+    global stop_event
+    stop_event = event
+    
+    while not stop_event.is_set():
         try:
             start_time = time.time()
             messages_batch = kafka_consumer.consume(BATCH_SIZE, timeout=1.0)
