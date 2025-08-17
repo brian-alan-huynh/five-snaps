@@ -13,7 +13,7 @@ env = os.getenv
 
 class Redis:
     @staticmethod
-    def add_new_session(user_id: int, oauth_access_token: str) -> str | bool:
+    def add_new_session(user_id: int) -> str | bool:
         try: 
             session_id = str(uuid.uuid4())
             session_key = f"session:{session_id}"
@@ -22,7 +22,7 @@ class Redis:
                 "operation": "add_new_session",
                 "session_key": session_key,
                 "user_id": user_id,
-                "oauth_access_token": oauth_access_token,
+                "thumbnail_img_url": "",
                 "created_at": datetime.now(),
             }
 
@@ -42,6 +42,26 @@ class Redis:
     def get_session(session_key: str) -> dict | bool:
         try:
             return REDIS_CLIENT.hgetall(session_key)
+        except Exception:
+            return False
+        
+    @staticmethod
+    def place_thumbnail_img_url(session_key: str, thumbnail_img_url: str) -> bool:
+        try:
+            message = {
+                "operation": "place_thumbnail_img_url",
+                "session_key": session_key,
+                "thumbnail_img_url": thumbnail_img_url,
+            }
+
+            kafka_producer.produce(
+                topic="redis.place_thumbnail_img_url",
+                value=json.dumps(message).encode("utf-8"),
+            )
+
+            kafka_producer.flush()
+
+            return True
         
         except Exception:
             return False

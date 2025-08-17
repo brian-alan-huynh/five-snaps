@@ -35,6 +35,7 @@ kafka_consumer = Consumer({
 kafka_consumer.subscribe([
     "s3.delete_snap",
     "redis.add_new_session",
+    "redis.place_thumbnail_img_url",
     "redis.delete_session",
     "mongodb.add_img_tags",
 ])
@@ -67,14 +68,20 @@ def process_batch(messages: list):
                 case "add_new_session":
                     session_key = record_msg["session_key"]
                     user_id = record_msg["user_id"]
-                    oauth_access_token = record_msg["oauth_access_token"]
+                    thumbnail_img_url = record_msg["thumbnail_img_url"]
                     created_at = record_msg["created_at"]
                     
                     REDIS_CLIENT.hset(session_key, mapping={
                         "user_id": user_id,
-                        "oauth_access_token": oauth_access_token,
+                        "thumbnail_img_url": thumbnail_img_url,
                         "created_at": created_at,
                     })
+                    
+                case "place_thumbnail_img_url":
+                    session_key = record_msg["session_key"]
+                    thumbnail_img_url = record_msg["thumbnail_img_url"]
+                    
+                    REDIS_CLIENT.hset(session_key, "thumbnail_img_url", thumbnail_img_url)
                     
                 case "delete_session":
                     session_key = record_msg["session_key"]
