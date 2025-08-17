@@ -38,6 +38,7 @@ kafka_consumer.subscribe([
     "redis.place_thumbnail_img_url",
     "redis.delete_session",
     "mongodb.add_img_tags",
+    "mongodb.write_img_caption",
 ])
 
 BATCH_SIZE = 100
@@ -89,14 +90,27 @@ def process_batch(messages: list):
                     
                 case "add_img_tags":
                     user_id = record_msg["user_id"]
+                    s3_key = record_msg["s3_key"]
                     tags = record_msg["tags"]
+                    caption = record_msg["caption"]
                     created_at = record_msg["created_at"]
                     
                     MONGO_COLLECTION.insert_one({
                         "user_id": user_id,
+                        "s3_key": s3_key,
                         "tags": tags,
+                        "caption": caption,
                         "created_at": created_at,
                     })
+                    
+                case "write_img_caption":
+                    s3_key = record_msg["s3_key"]
+                    caption = record_msg["caption"]
+                    
+                    MONGO_COLLECTION.update_one(
+                        { "s3_key": s3_key },
+                        { "$set": { "caption": caption } },
+                    )
                     
                 case _:
                     # Once backend is completed, add log here
