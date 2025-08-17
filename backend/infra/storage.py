@@ -12,6 +12,7 @@ from .messaging import kafka_producer
 
 load_dotenv()
 env = os.getenv
+
 class S3:
     @staticmethod
     def _generate_s3_key(user_id: int, filename: str) -> str:
@@ -86,4 +87,3 @@ class S3:
 
         except ClientError:
             return False
-
