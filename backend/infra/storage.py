@@ -22,7 +22,7 @@ class S3:
         return f"{user_id}/snap/{timestamp}_{unique_id}{file_extension}"
 
     @classmethod
-    async def upload_snap(cls, user_id: int, img_file: UploadFile) -> bool:
+    async def upload_snap(cls, user_id: int, img_file: UploadFile) -> str | bool:
         try:
             file_extension = os.path.splitext(img_file.filename)[1].lower()
             
@@ -40,7 +40,7 @@ class S3:
                 ACL='public-read',
             )
             
-            return True
+            return f"https://{BUCKET_NAME}.s3.{env("AWS_S3_REGION")}.amazonaws.com/{s3_key}"
         
         except ClientError:
             return False
