@@ -4,7 +4,7 @@ import random
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import home, snap, settings
+from routers import auth, snap, settings
 from infra.db import RDS
 from infra.messaging import run_consumer
 
@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(home.router, prefix="/api/v1/home")
+app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(snap.router, prefix="/api/v1/snap")
 app.include_router(settings.router, prefix="/api/v1/settings")
 
