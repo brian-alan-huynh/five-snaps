@@ -63,9 +63,16 @@ async def root(session_key: str):
                          "Annyeonghaseyo", "Privet", "Hallo", "Geiá sou", 
                          "Olá", "S̄wạs̄dī", "As-salamu alaykum"]
 
+    if not thumbnail_img_url:
+        return {
+            "success": True,
+            "message": "Take a snap to get started!",
+            "greeting_display": f"{random.choice(greeting_messages)}, {first_name}!",
+        }
+        
     return {
         "success": True,
-        "message": f"{random.choice(greeting_messages)}, {first_name}!",
+        "greeting_display": f"{random.choice(greeting_messages)}, {first_name}!",
         "thumbnail_img_url": thumbnail_img_url,
     }
 
