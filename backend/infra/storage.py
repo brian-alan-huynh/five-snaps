@@ -47,12 +47,22 @@ class S3:
             return False
         
     @staticmethod
-    def read_snaps(user_id: int) -> list[dict[str, str | datetime]] | bool:
+    def read_snaps(user_id: int, most_recent: bool = False) -> list[dict[str, str | datetime]] | bool:
         try:
             response = S3_CLIENT.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{user_id}/snap/")
             
             if "Contents" not in response:
                 return False
+            
+            if most_recent:
+                obj = response["Contents"][0]
+                
+                return {
+                    "img_url": f"https://{BUCKET_NAME}.s3.{env("AWS_S3_REGION")}.amazonaws.com/{obj["Key"]}",
+                    "created_at": obj["LastModified"],
+                    "file_size": obj["Size"],
+                    "s3_key": obj["Key"],
+                }
             
             snaps = [
                 {

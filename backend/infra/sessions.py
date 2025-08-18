@@ -85,3 +85,38 @@ class Redis:
 
         except Exception:
             return False
+        
+    @staticmethod
+    def add_otp(otp: int, email: str) -> bool:
+        try:
+            message = {
+                "operation": "add_otp",
+                "otp": otp,
+                "email": email,
+            }
+
+            kafka_producer.produce(
+                topic="redis.add_otp",
+                value=json.dumps(message).encode("utf-8"),
+            )
+
+            kafka_producer.flush()
+
+            return True
+        
+        except Exception:
+            return False
+        
+    @staticmethod
+    def verify_otp(user_otp: int, email: str) -> bool:
+        try:
+            otp = REDIS_CLIENT.get(email)
+            
+            if not otp or int(otp) != user_otp:
+                return False
+            
+            return True
+            
+        except Exception:
+            return False
+    

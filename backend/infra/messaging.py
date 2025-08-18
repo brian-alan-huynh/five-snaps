@@ -37,6 +37,7 @@ kafka_consumer.subscribe([
     "redis.add_new_session",
     "redis.place_thumbnail_img_url",
     "redis.delete_session",
+    "redis.add_otp",
     "mongodb.add_img_tags",
     "mongodb.write_img_caption",
 ])
@@ -80,6 +81,8 @@ def process_batch(messages: list):
                         "created_at": created_at,
                     })
                     
+                    REDIS_CLIENT.expire(session_key, 51840)
+                    
                 case "place_thumbnail_img_url":
                     session_key = record_msg["session_key"]
                     thumbnail_img_url = record_msg["thumbnail_img_url"]
@@ -89,6 +92,12 @@ def process_batch(messages: list):
                 case "delete_session":
                     session_key = record_msg["session_key"]
                     REDIS_CLIENT.delete(session_key)
+                    
+                case "add_otp":
+                    otp = record_msg["otp"]
+                    email = record_msg["email"]
+                    
+                    REDIS_CLIENT.setex(key=email, time=900, value=otp)
                     
                 case "add_img_tags":
                     user_id = record_msg["user_id"]
