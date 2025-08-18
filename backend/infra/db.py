@@ -269,7 +269,7 @@ class RDS:
         password: Optional[str] = None,
         oauth_user_id: Optional[str] = None,
         after_successful_2fa_or_oauth: bool = False,
-    ) -> bool | int:
+    ) -> bool | int | dict[str, str]:
         
         db = self.SessionLocal()
 
@@ -295,6 +295,12 @@ class RDS:
                     return False
 
             if not after_successful_2fa_or_oauth:
+                if username_or_email and password:
+                    return {
+                        "email": db_user.email,
+                        "first_name": db_user.first_name,
+                    }
+                
                 return True
             
             else:
