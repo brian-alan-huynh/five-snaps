@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routers import auth, snap, settings
 from infra.db import RDS
+from infra.sessions import Redis
 from infra.messaging import run_consumer
 
 app = FastAPI()
@@ -44,18 +45,28 @@ def stop_kafka_consumer():
     app.state.kafka_stop_event.set()
     app.state.kafka_thread.join()
 
-@app.get("/")
-async def root():
+@app.post("/")
+async def root(session_key: str):
+    session = Redis.get_session(session_key)
+    
+    if not session:
+        return { "success": False, "message": "You have been logged out! Please sign back in!" }
+    
+    first_name = rds.read_user(session["user_id"])["first_name"].title()
+    thumbnail_img_url = session["thumbnail_img_url"]
+    
     greeting_messages = ["Howdy", "Greetings", "How's it going",
                          "Hello", "Hi", "Hey", "How are ya?", "What's up?", 
                          "What's going on?", "What's new?", "What're you up to?", 
                          "What're you doing?", "Hola", "Bonjour", "Ciao", "Konnichiwa", 
                          "Nǐ hǎo", "Xin chào", "Merhaba", "Namaste", "Konnichiwa", 
-                         "Annyeonghaseyo", "Privet", "Hallo", "Geiá sou"]
+                         "Annyeonghaseyo", "Privet", "Hallo", "Geiá sou", 
+                         "Olá", "S̄wạs̄dī", "As-salamu alaykum"]
 
     return {
-        "message": f"{random.choice(greeting_messages)}, Earthling",
-        "version": "0.1.0",
+        "success": True,
+        "message": f"{random.choice(greeting_messages)}, {first_name}!",
+        "thumbnail_img_url": thumbnail_img_url,
     }
 
 @app.get("/health")
