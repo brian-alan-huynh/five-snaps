@@ -4,12 +4,14 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import pyotp
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from dotenv import load_dotenv
 
 from ..main import rds
 from ..infra.sessions import Redis
+from ..infra.oauth import oauth
 from ..infra.storage import S3
+from ..utils.oauth_login import signup_or_login_oauth
 
 load_dotenv()
 env = os.getenv
@@ -20,6 +22,78 @@ router = APIRouter(
     responses={401: {"description": "Unauthorized"}},
 )
 
+@router.get("/login/google")
+async def login_google(request: Request):
+    try:
+        redirect_uri = request.url_for("google_auth")
+        return await oauth.google.authorize_redirect(request, redirect_uri)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Google" }
+    
+@router.get("/auth/google")
+async def google_auth(request: Request):
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user = await oauth.google.parse_id_token(token)
+        
+        user_id = user.get("sub")
+        first_name = user.get("given_name")
+        
+        return signup_or_login_oauth(first_name, "google", user_id)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Google" }
+
+@router.get("/login/facebook")
+async def login_facebook(request: Request):
+    try:
+        redirect_uri = request.url_for("facebook_auth")
+        return await oauth.facebook.authorize_redirect(request, redirect_uri)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Facebook" }
+    
+@router.get("/auth/facebook")
+async def facebook_auth(request: Request):
+    try:
+        token = await oauth.facebook.authorize_access_token(request)
+        resp = await oauth.facebook.get("me?fields=id,first_name,email", token=token)
+        user = await resp.json()
+        
+        user_id = user.get("id")
+        first_name = user.get("first_name")
+        
+        return signup_or_login_oauth(first_name, "facebook", user_id)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Facebook" }
+    
+@router.get("/login/apple")
+async def login_apple(request: Request):
+    try:
+        redirect_uri = request.url_for("apple_auth")
+        return await oauth.apple.authorize_redirect(request, redirect_uri)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Apple" }
+    
+@router.post("/auth/apple")
+async def apple_auth(request: Request):
+    try:
+        token = await oauth.apple.authorize_access_token(request)
+        id_token = token.get("id_token")
+        form_data = await request.form()
+        user_data = await form_data.get("user")
+        
+        user_id = id_token.get("sub") if id_token else None
+        first_name = json.loads(user_data).get("name", {}).get("firstName") if user_data else None
+        
+        return signup_or_login_oauth(first_name, "apple", user_id)
+    
+    except Exception:
+        return { "success": False, "message": "Failed to login with Apple" }
+    
 @router.post("/request-otp")
 async def request_otp(first_name: str, email: str):
     try:
@@ -77,9 +151,9 @@ async def verify_otp(email: str, user_otp: str):
         res = Redis.verify_otp(int(user_otp), email)
     
         if not res:
-            return { "success": False, "message": "Invalid OTP" }
+            return { "success": False, "message": "Incorrect or expired OTP" }
     
-        return { "success": True }
+        return { "success": True, "message": "Verification successful" }
     
     except Exception:
         return { "success": False, "message": "Failed to verify OTP" }
@@ -97,10 +171,76 @@ async def signup(first_name: str, username: str, password: str, email: str):
         if not session_key:
             return { "success": False, "message": "Failed to create session" }
 
-        return { "success": True, "session_key": session_key }
+        return {
+            "success": True, 
+            "message": "Account successfully created!", 
+            "session_key": session_key,
+        }
     
     except Exception:
         return { "success": False, "message": "Failed to create account" }
 
-# add login and oauth below
-# when the user signs in, create a new session and fetch the most recent s3 snap image (read_snaps(user_id, most_recent=True)) and put that as the thumbnail_img_url in redis
+@router.post("/validate")
+async def validate(username_or_email: str, password: str):
+    try:
+        res = rds.check_login_creds(username_or_email, password)
+            
+        if not res:
+            return { "success": False, "message": "Incorrect username/email or password" }
+
+        email = res["email"]
+        first_name = res["first_name"]
+            
+        return {
+            "success": True, 
+            "email": email, 
+            "first_name": first_name,
+        }
+        
+    except Exception:
+        return { "success": False, "message": "Failed to validate" }
+    
+@router.post("/login")
+async def login(username_or_email: str, password: str):
+    try:
+        user_id = rds.check_login_creds(username_or_email, password, after_successful_2fa_or_oauth=True)
+            
+        if not user_id:
+            return {
+                "success": False, 
+                "message": "Something went wrong! We could not log you in despite having the correct credentials!",
+            }
+            
+        session_key = Redis.add_new_session(user_id)
+            
+        if not session_key:
+            return { "success": False, "message": "Failed to create session" }
+        
+        most_recent_snap = S3.read_snaps(user_id, most_recent=True)
+        
+        if most_recent_snap:
+            res = Redis.place_thumbnail_img_url(session_key, most_recent_snap)
+            
+            if not res:
+                return {
+                    "success": True, 
+                    "message": "Failed to get the most recent snap for thumbnail", 
+                    "session_key": session_key,
+                }
+            
+        return {
+            "success": True, 
+            "message": "Successfully logged in!", 
+            "session_key": session_key,
+        }
+        
+    except Exception:
+        return { "success": False, "message": "Failed to login" }
+    
+@router.post("/logout")
+async def logout(session_key: str):
+    try:
+        Redis.delete_session(session_key)
+        return { "success": True, "message": "Successfully logged out!" }
+    except Exception:
+        return { "success": False, "message": "Failed to logout" }
