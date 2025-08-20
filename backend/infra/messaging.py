@@ -81,7 +81,7 @@ def process_batch(messages: list):
                         "created_at": created_at,
                     })
                     
-                    REDIS_CLIENT.expire(session_key, 51840)
+                    REDIS_CLIENT.expire(session_key, 60 * 60 * 24 * 7 * 4 * 6)
                     
                 case "place_thumbnail_img_url":
                     session_key = record_msg["session_key"]
