@@ -20,12 +20,12 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True) # Used to identify users logged in via local account
-    username = Column(String, unique=True, index=True, nullable=True) # Nullable for OAuth users
-    password = Column(String, nullable=True) # Nullable for OAuth users
-    email = Column(String, nullable=True, unique=True, index=True) # Nullable for OAuth users
+    username = Column(String, unique=True, index=True, nullable=True, default=None) # Nullable for OAuth users
+    password = Column(String, nullable=True, default=None) # Nullable for OAuth users
+    email = Column(String, nullable=True, unique=True, index=True, default=None) # Nullable for OAuth users
     first_name = Column(String, nullable=False)
-    oauth_provider = Column(String, nullable=True) # "google", "facebook", "apple"
-    oauth_provider_user_id = Column(String, nullable=True, unique=True) # Used to identify users logged in via OAuth
+    oauth_provider = Column(String, nullable=True, default=None) # "google", "facebook", "apple"
+    oauth_provider_user_id = Column(String, nullable=True, unique=True, default=None) # Used to identify users logged in via OAuth
     created_at = Column(DateTime, default=datetime.now(), nullable=False)
     last_login_at = Column(DateTime, default=datetime.now(), nullable=False)
 
@@ -99,13 +99,23 @@ class RDS:
             if not db_user:
                 return False
 
+            if db_user.oauth_provider:
+                return {
+                    "is_oauth": True,
+                    "account_type": f"Linked with {db_user.oauth_provider}",
+                    "first_name": db_user.first_name,
+                    "user_id": db_user.id,
+                    "created_at": str(db_user.created_at),
+                    "last_login_at": str(db_user.last_login_at),
+                }
+               
             return {
-                "account_type": "local" if db_user.username else "oauth",
+                "is_oauth": False,
+                "account_type": "Normal (not linked)",
                 "username": db_user.username,
                 "email": db_user.email,
                 "first_name": db_user.first_name,
-                "oauth_provider": db_user.oauth_provider,
-                "oauth_provider_user_id": db_user.oauth_provider_user_id,
+                "user_id": db_user.id,
                 "created_at": str(db_user.created_at),
                 "last_login_at": str(db_user.last_login_at),
             }
