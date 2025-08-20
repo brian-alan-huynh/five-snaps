@@ -30,6 +30,11 @@ def signup_or_login_oauth(first_name: str, provider: str, user_id: int) -> str |
             if not new_user_id:
                 return False
             
+            res_user_preference = rds.create_user_preference(new_user_id, "light")
+            
+            if not res_user_preference:
+                return False
+            
             user_id = new_user_id
             
         else:

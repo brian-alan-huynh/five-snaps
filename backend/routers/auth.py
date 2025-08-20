@@ -43,7 +43,7 @@ async def google_auth(request: Request):
         session_key = signup_or_login_oauth(first_name, "google", user_id)
         
         if not session_key:
-            return RedirectResponse(url="http://localhost:3000/error?where=google&reason=session")
+            return RedirectResponse(url="http://localhost:3000/error?where=google&reason=account+setup+failure")
         
         return redirect_and_set_cookie(session_key)
     
@@ -72,7 +72,7 @@ async def facebook_auth(request: Request):
         session_key = signup_or_login_oauth(first_name, "facebook", user_id)
         
         if not session_key:
-            return RedirectResponse(url="http://localhost:3000/error?where=facebook&reason=session")
+            return RedirectResponse(url="http://localhost:3000/error?where=facebook&reason=account+setup+failure")
         
         return redirect_and_set_cookie(session_key)
     
@@ -102,7 +102,7 @@ async def apple_auth(request: Request):
         session_key = signup_or_login_oauth(first_name, "apple", user_id)
         
         if not session_key:
-            return RedirectResponse(url="http://localhost:3000/error?where=apple&reason=session")
+            return RedirectResponse(url="http://localhost:3000/error?where=apple&reason=account+setup+failure")
         
         return redirect_and_set_cookie(session_key)
     
@@ -179,7 +179,12 @@ async def signup(first_name: str, username: str, password: str, email: str):
         user_id = rds.create_user(first_name, username, password, email)
 
         if not user_id:
-            return RedirectResponse(url="http://localhost:3000/error?where=signup&reason=account+create+failure")
+            return RedirectResponse(url="http://localhost:3000/error?where=signup&reason=account+setup+failure")
+        
+        res_user_preference = rds.create_user_preference(user_id, "light")
+        
+        if not res_user_preference:
+            return RedirectResponse(url="http://localhost:3000/error?where=signup&reason=account+setup+failure")
 
         session_key = Redis.add_new_session(user_id)
 
