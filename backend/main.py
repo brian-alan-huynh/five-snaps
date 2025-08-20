@@ -68,11 +68,15 @@ async def root(request: Request):
                          "Annyeonghaseyo", "Privet", "Hallo", "Geiá sou", 
                          "Olá", "S̄wạs̄dī", "As-salamu alaykum"]
 
-    if not thumbnail_img_url:
+    if thumbnail_img_url == "not found" or thumbnail_img_url == "error":
         return {
             "no_thumbnail": True,
             "greeting_display": f"{random.choice(greeting_messages)}, {first_name}!",
-            "message": "Take a snap to get started!",
+            "message": (
+                "Take a snap to get started!" 
+                if thumbnail_img_url == "not found" 
+                else "Cannot load thumbnail"
+            ),
         }
         
     return {
