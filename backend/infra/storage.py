@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+from io import BytesIO
 from datetime import datetime
 
 from botocore.exceptions import ClientError
@@ -31,14 +32,16 @@ class S3:
                 return False
                 
             s3_key = cls._generate_s3_key(user_id, img_file.filename)
-            img_content = await img_file.read()
+            img_content = BytesIO(await img_file.read())
             
-            S3_CLIENT.put_object(
+            S3_CLIENT.upload_fileobj(
                 Bucket=BUCKET_NAME,
                 Key=s3_key,
-                Body=img_content,
-                ContentType=img_file.content_type,
-                ACL='public-read',
+                Fileobj=img_content,
+                ExtraArgs={
+                    "ContentType": img_file.content_type,
+                    "ACL": "public-read",
+                },
             )
             
             return f"https://{BUCKET_NAME}.s3.{env("AWS_S3_REGION")}.amazonaws.com/{s3_key}", s3_key
