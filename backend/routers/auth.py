@@ -19,7 +19,7 @@ env = os.getenv
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],
-    responses={401: {"description": "Unauthorized"}},
+    responses={ 401: { "description": "Unauthorized" } },
 )
 
 @router.get("/login/google")
@@ -174,7 +174,7 @@ async def verify_otp(email: str, user_otp: str):
         return RedirectResponse(url=f"http://localhost:3000/error?where=otp&reason={e}")
     
 @router.post("/signup")
-async def signup(first_name: str, username: str, password: str, email: str, request: Request):
+async def signup(first_name: str, username: str, password: str, email: str):
     try:
         user_id = rds.create_user(first_name, username, password, email)
 
@@ -232,8 +232,10 @@ async def login(username_or_email: str, password: str):
         return RedirectResponse(url=f"http://localhost:3000/error?where=login&reason={e}")
     
 @router.post("/logout")
-async def logout(session_key: str, response: Response):
+async def logout(request: Request, response: Response):
     try:
+        session_key = request.cookies.get("session_key")
+        
         Redis.delete_session(session_key)
         response.delete_cookie("session_key")
         
