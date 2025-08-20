@@ -5,13 +5,13 @@ from email.mime.multipart import MIMEMultipart
 
 import pyotp
 from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 
 from ..main import rds
 from ..infra.sessions import Redis
 from ..infra.oauth import oauth
-from ..infra.storage import S3
-from ..utils.oauth_login import signup_or_login_oauth
+from ..utils.login import update_thumbnail, signup_or_login_oauth, redirect_and_set_cookie
 
 load_dotenv()
 env = os.getenv
@@ -28,8 +28,8 @@ async def login_google(request: Request):
         redirect_uri = request.url_for("google_auth")
         return await oauth.google.authorize_redirect(request, redirect_uri)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Google" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=google&reason={e}")
     
 @router.get("/auth/google")
 async def google_auth(request: Request):
@@ -40,10 +40,15 @@ async def google_auth(request: Request):
         user_id = user.get("sub")
         first_name = user.get("given_name")
         
-        return signup_or_login_oauth(first_name, "google", user_id)
+        session_key = signup_or_login_oauth(first_name, "google", user_id)
+        
+        if not session_key:
+            return RedirectResponse(url="http://localhost:3000/error?where=google&reason=session")
+        
+        return redirect_and_set_cookie(session_key)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Google" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=google&reason={e}")
 
 @router.get("/login/facebook")
 async def login_facebook(request: Request):
@@ -51,8 +56,8 @@ async def login_facebook(request: Request):
         redirect_uri = request.url_for("facebook_auth")
         return await oauth.facebook.authorize_redirect(request, redirect_uri)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Facebook" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=facebook&reason={e}")
     
 @router.get("/auth/facebook")
 async def facebook_auth(request: Request):
@@ -64,10 +69,15 @@ async def facebook_auth(request: Request):
         user_id = user.get("id")
         first_name = user.get("first_name")
         
-        return signup_or_login_oauth(first_name, "facebook", user_id)
+        session_key = signup_or_login_oauth(first_name, "facebook", user_id)
+        
+        if not session_key:
+            return RedirectResponse(url="http://localhost:3000/error?where=facebook&reason=session")
+        
+        return redirect_and_set_cookie(session_key)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Facebook" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=facebook&reason={e}")
     
 @router.get("/login/apple")
 async def login_apple(request: Request):
@@ -75,8 +85,8 @@ async def login_apple(request: Request):
         redirect_uri = request.url_for("apple_auth")
         return await oauth.apple.authorize_redirect(request, redirect_uri)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Apple" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=apple&reason={e}")
     
 @router.post("/auth/apple")
 async def apple_auth(request: Request):
@@ -89,10 +99,15 @@ async def apple_auth(request: Request):
         user_id = id_token.get("sub") if id_token else None
         first_name = json.loads(user_data).get("name", {}).get("firstName") if user_data else None
         
-        return signup_or_login_oauth(first_name, "apple", user_id)
+        session_key = signup_or_login_oauth(first_name, "apple", user_id)
+        
+        if not session_key:
+            return RedirectResponse(url="http://localhost:3000/error?where=apple&reason=session")
+        
+        return redirect_and_set_cookie(session_key)
     
-    except Exception:
-        return { "success": False, "message": "Failed to login with Apple" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=apple&reason={e}")
     
 @router.post("/request-otp")
 async def request_otp(first_name: str, email: str):
@@ -138,12 +153,12 @@ async def request_otp(first_name: str, email: str):
         res = Redis.add_otp(int(otp), email)
         
         if not res:
-            return { "success": False, "message": "Failed to send OTP" }
+            return RedirectResponse(url="http://localhost:3000/error?where=otp&reason=storing+otp")
             
-        return { "success": True }
+        return True
     
-    except Exception:
-        return { "success": False, "message": "Failed to send OTP" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=otp&reason={e}")
 
 @router.post("/verify-otp")
 async def verify_otp(email: str, user_otp: str):
@@ -151,34 +166,30 @@ async def verify_otp(email: str, user_otp: str):
         res = Redis.verify_otp(int(user_otp), email)
     
         if not res:
-            return { "success": False, "message": "Incorrect or expired OTP" }
+            return False
     
-        return { "success": True, "message": "Verification successful" }
+        return True
     
-    except Exception:
-        return { "success": False, "message": "Failed to verify OTP" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=otp&reason={e}")
     
 @router.post("/signup")
-async def signup(first_name: str, username: str, password: str, email: str):
+async def signup(first_name: str, username: str, password: str, email: str, request: Request):
     try:
         user_id = rds.create_user(first_name, username, password, email)
 
         if not user_id:
-            return { "success": False, "message": "Failed to create account" }
+            return RedirectResponse(url="http://localhost:3000/error?where=signup&reason=account+create+failure")
 
         session_key = Redis.add_new_session(user_id)
 
         if not session_key:
-            return { "success": False, "message": "Failed to create session" }
+            return RedirectResponse(url="http://localhost:3000/error?where=signup&reason=session+create+failure")
 
-        return {
-            "success": True, 
-            "message": "Account successfully created!", 
-            "session_key": session_key,
-        }
+        return redirect_and_set_cookie(session_key)
     
-    except Exception:
-        return { "success": False, "message": "Failed to create account" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=signup&reason={e}")
 
 @router.post("/validate")
 async def validate(username_or_email: str, password: str):
@@ -186,19 +197,19 @@ async def validate(username_or_email: str, password: str):
         res = rds.check_login_creds(username_or_email, password)
             
         if not res:
-            return { "success": False, "message": "Incorrect username/email or password" }
+            return { "correct_creds": False, "message": "Incorrect username/email or password" }
 
         email = res["email"]
         first_name = res["first_name"]
             
         return {
-            "success": True, 
+            "correct_creds": True, 
             "email": email, 
             "first_name": first_name,
         }
         
-    except Exception:
-        return { "success": False, "message": "Failed to validate" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=validate&reason={e}")
     
 @router.post("/login")
 async def login(username_or_email: str, password: str):
@@ -206,41 +217,27 @@ async def login(username_or_email: str, password: str):
         user_id = rds.check_login_creds(username_or_email, password, after_successful_2fa_or_oauth=True)
             
         if not user_id:
-            return {
-                "success": False, 
-                "message": "Something went wrong! We could not log you in despite having the correct credentials!",
-            }
+            return RedirectResponse(url="http://localhost:3000/error?where=login&reason=login+failure")
             
         session_key = Redis.add_new_session(user_id)
             
         if not session_key:
-            return { "success": False, "message": "Failed to create session" }
+            return RedirectResponse(url="http://localhost:3000/error?where=login&reason=session+create+failure")
         
-        most_recent_snap = S3.read_snaps(user_id, most_recent=True)
-        
-        if most_recent_snap:
-            res = Redis.place_thumbnail_img_url(session_key, most_recent_snap)
+        update_thumbnail(user_id, session_key)
             
-            if not res:
-                return {
-                    "success": True, 
-                    "message": "Failed to get the most recent snap for thumbnail", 
-                    "session_key": session_key,
-                }
-            
-        return {
-            "success": True, 
-            "message": "Successfully logged in!", 
-            "session_key": session_key,
-        }
+        return redirect_and_set_cookie(session_key)
         
-    except Exception:
-        return { "success": False, "message": "Failed to login" }
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=login&reason={e}")
     
 @router.post("/logout")
-async def logout(session_key: str):
+async def logout(session_key: str, response: Response):
     try:
         Redis.delete_session(session_key)
-        return { "success": True, "message": "Successfully logged out!" }
-    except Exception:
-        return { "success": False, "message": "Failed to logout" }
+        response.delete_cookie("session_key")
+        
+        return RedirectResponse(url="http://localhost:3000/login")
+    
+    except Exception as e:
+        return RedirectResponse(url=f"http://localhost:3000/error?where=logout&reason={e}")
