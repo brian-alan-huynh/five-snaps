@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 
 from ..main import rds
@@ -37,7 +37,7 @@ async def details(request: Request):
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=details&reason={e}")
 
-@router.post("/update")
+@router.put("/update")
 async def update(
     request: Request,
     first_name: Optional[str] = None,
@@ -70,7 +70,7 @@ async def update(
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=update&reason={e}")
 
-@router.post("/delete")
+@router.delete("/account")
 async def delete(request: Request, response: Response):
     try:
         session_key = request.cookies.get("session_key")
@@ -92,6 +92,8 @@ async def delete(request: Request, response: Response):
         
         Redis.delete_session(session_key)
         response.delete_cookie("session_key")
+        
+        return { "message": "Account deleted successfully" }
     
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=delete&reason={e}")
