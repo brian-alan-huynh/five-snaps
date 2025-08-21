@@ -4,7 +4,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import pyotp
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 
@@ -155,7 +155,7 @@ async def request_otp(first_name: str, email: str):
         if not res:
             return RedirectResponse(url="http://localhost:3000/error?where=otp&reason=storing+otp")
             
-        return True
+        return Response(status_code=200)
     
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=otp&reason={e}")
@@ -166,9 +166,9 @@ async def verify_otp(email: str, user_otp: str):
         res = Redis.verify_otp(int(user_otp), email)
     
         if not res:
-            return False
+            return Response(status_code=400)
     
-        return True
+        return { "message": "Verified successfully" }
     
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=otp&reason={e}")
@@ -202,13 +202,12 @@ async def validate(username_or_email: str, password: str):
         res = rds.check_login_creds(username_or_email, password)
             
         if not res:
-            return { "correct_creds": False, "message": "Incorrect username/email or password" }
+            return Response(status_code=400)
 
         email = res["email"]
         first_name = res["first_name"]
             
         return {
-            "correct_creds": True, 
             "email": email, 
             "first_name": first_name,
         }
