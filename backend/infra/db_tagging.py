@@ -53,8 +53,28 @@ class MongoDB:
     @staticmethod
     def read_img_tags_and_captions(user_id: int) -> list[dict[str, str | datetime]] | bool:
         try:
-            img_tags = list(MONGO_COLLECTION.find({ "user_id": user_id }).sort("created_at", -1))
-            return img_tags
+            img_tags_and_captions = list(MONGO_COLLECTION.find({ "user_id": user_id }).sort("created_at", -1))
+            return img_tags_and_captions
+        
+        except Exception:
+            return False
+        
+    @staticmethod
+    def delete_img_tags_and_captions(s3_key: str) -> bool:
+        try:
+            message = {
+                "operation": "delete_img_tags_and_captions",
+                "s3_key": s3_key,
+            }
+            
+            kafka_producer.produce(
+                topic="mongodb.delete_img_tags_and_captions",
+                value=json.dumps(message).encode("utf-8"),
+            )
+            
+            kafka_producer.flush()
+            
+            return True
         
         except Exception:
             return False
