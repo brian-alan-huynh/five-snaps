@@ -40,6 +40,7 @@ kafka_consumer.subscribe([
     "redis.add_otp",
     "mongodb.add_img_tags",
     "mongodb.write_img_caption",
+    "mongodb.delete_img_tags_and_captions",
 ])
 
 BATCH_SIZE = 100
@@ -122,6 +123,10 @@ def process_batch(messages: list):
                         { "s3_key": s3_key },
                         { "$set": { "caption": caption } },
                     )
+                    
+                case "delete_img_tags_and_captions":
+                    s3_key = record_msg["s3_key"]
+                    MONGO_COLLECTION.delete_one({ "s3_key": s3_key })
                     
                 case _:
                     # Once backend is completed, add log here
