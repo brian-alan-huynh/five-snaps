@@ -8,6 +8,7 @@ from routers import auth, snap, user
 from infra.db import RDS
 from infra.sessions import Redis
 from infra.messaging import run_consumer
+from logging_config import terminate_logging
 
 app = FastAPI()
 
@@ -31,7 +32,7 @@ app.include_router(user.router, prefix="/api/v1")
 rds = RDS()
 
 @app.on_event("startup")
-def start_kafka_consumer():
+def startup_processes():
     event = threading.Event()
     
     thread = threading.Thread(target=run_consumer, args=(event,), daemon=True)
@@ -41,9 +42,11 @@ def start_kafka_consumer():
     app.state.kafka_stop_event = event
 
 @app.on_event("shutdown")
-def stop_kafka_consumer():
+def shutdown_processes():
     app.state.kafka_stop_event.set()
     app.state.kafka_thread.join()
+    
+    terminate_logging()
 
 @app.post("/")
 async def root(request: Request):

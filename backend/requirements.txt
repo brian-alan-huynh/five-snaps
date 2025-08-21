@@ -13,3 +13,4 @@ pyotp
 boto3
 sqlalchemy
 pymongo
+python-logging-loki
