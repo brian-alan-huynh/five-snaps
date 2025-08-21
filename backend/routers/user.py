@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 
 from ..main import rds
+from ..infra.storage import S3
 from ..infra.sessions import Redis
 
 router = APIRouter(
@@ -32,7 +33,10 @@ async def details(request: Request):
         if not user_preferences_details:
             return RedirectResponse(url="http://localhost:3000/error?where=details&reason=user+preferences+fetch+error")
     
-        return user_details | user_preferences_details
+        details = user_details | user_preferences_details
+        details["snap_count"] = S3.get_snap_count(user_id)
+        
+        return details
     
     except Exception as e:
         return RedirectResponse(url=f"http://localhost:3000/error?where=details&reason={e}")

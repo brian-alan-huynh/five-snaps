@@ -74,6 +74,19 @@ class S3:
         
         except ClientError:
             return False
+        
+    @staticmethod
+    def get_snap_count(user_id: int) -> int | bool:
+        try:
+            response = S3_CLIENT.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{user_id}/snap/")
+            
+            if "Contents" not in response:
+                return False
+            
+            return len(response["Contents"])
+        
+        except ClientError:
+            return False
 
     @staticmethod
     def delete_snap(s3_key: str) -> bool:
