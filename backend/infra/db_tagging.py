@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 from .messaging import kafka_producer
-from ..config import MONGO_COLLECTION
+from ..config.config import MONGO_COLLECTION
 
 class MongoDB:
     @staticmethod

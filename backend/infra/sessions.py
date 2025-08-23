@@ -6,7 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from .messaging import kafka_producer
-from ..config import REDIS_CLIENT
+from ..config.config import REDIS_CLIENT
 
 load_dotenv()
 env = os.getenv

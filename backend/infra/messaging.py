@@ -5,7 +5,7 @@ import time
 from confluent_kafka import Producer, Consumer
 from dotenv import load_dotenv
 
-from ..config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
+from ..config.config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
 
 load_dotenv()
 env = os.getenv

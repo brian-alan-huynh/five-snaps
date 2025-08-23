@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from fastapi import UploadFile
 
-from ..config import S3_CLIENT, BUCKET_NAME
+from ..config.config import S3_CLIENT, BUCKET_NAME
 from .messaging import kafka_producer
 
 load_dotenv()
