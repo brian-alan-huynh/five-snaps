@@ -1,8 +1,10 @@
 requests
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 pydantic
+pydantic-settings
+pytest
 confluent-kafka
 redis[hiredis]
 fastapi-csrf-protect
@@ -14,3 +16,4 @@ boto3
 sqlalchemy
 pymongo
 python-logging-loki
+orjson
