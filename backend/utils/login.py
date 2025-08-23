@@ -6,13 +6,11 @@ def update_thumbnail(user_id: int, session_key: str) -> bool:
     most_recent_snap = S3.read_snaps(user_id, most_recent=True)
             
     if not most_recent_snap:
-        Redis.place_thumbnail_img_url(session_key, "not found")
         return
     
     res = Redis.place_thumbnail_img_url(session_key, most_recent_snap)
     
     if not res:
-        Redis.place_thumbnail_img_url(session_key, "error")
         return
 
 def signup_or_login_oauth(first_name: str, provider: str, user_id: int) -> str | bool:
