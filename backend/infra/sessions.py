@@ -6,14 +6,41 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from .messaging import kafka_producer
+from ..app import app
 from ..config.config import REDIS_CLIENT
+
+class RedisError(Exception):
+    "Exception for Redis operations"
+    pass
+
+class KafkaProduceDeliveryError(RedisError):
+    "Exception for Kafka producer message delivery"
+    pass
+
+class KafkaProduceOperationError(RedisError):
+    "Exception for Kafka producer operations"
+    pass
 
 load_dotenv()
 env = os.getenv
 
 class Redis:
     @staticmethod
-    def add_new_session(user_id: int) -> str | bool:
+    def _raise_kafka_message_delivery_failure(func_name: str, remaining_messages: int) -> None:
+        error_message = f"Failed to deliver message to Kafka in {func_name}: {remaining_messages} messages (within 15 seconds)"
+        
+        app.state.logger.log_error(error_message)
+        raise KafkaProduceDeliveryError(error_message)
+    
+    @staticmethod
+    def _raise_kafka_message_produce_failure(func_name: str, error: Exception) -> None:
+        error_message = f"Failed to produce message to Kafka in {func_name}: {error}"
+        
+        app.state.logger.log_error(error_message)
+        raise KafkaProduceOperationError(error_message) from error
+    
+    @classmethod
+    def add_new_session(cls, user_id: int) -> str:
         try: 
             session_id = str(uuid.uuid4())
             session_key = f"session:{session_id}"
@@ -28,25 +55,36 @@ class Redis:
 
             kafka_producer.produce(
                 topic="redis.add_new_session",
+                key=str(session_key).encode("utf-8"),
                 value=json.dumps(message).encode("utf-8"),
             )
 
-            kafka_producer.flush()
+            remaining_messages = kafka_producer.flush(timeout=15)
+
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("add_new_session", remaining_messages)
 
             return session_key
 
-        except Exception:
-            return False
+        except KafkaProduceDeliveryError:
+            raise
+
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("add_new_session", e)
 
     @staticmethod
-    def get_session(session_key: str) -> dict | bool:
+    def get_session(session_key: str) -> dict | list:
         try:
             return REDIS_CLIENT.hgetall(session_key)
-        except Exception:
-            return False
         
-    @staticmethod
-    def place_thumbnail_img_url(session_key: str, thumbnail_img_url: str) -> bool:
+        except Exception as e:
+            error_message = f"Failed to get session from Redis in get_session: {e}"
+            
+            app.state.logger.log_error(error_message)
+            raise RedisError(error_message) from e
+        
+    @classmethod
+    def place_thumbnail_img_url(cls, session_key: str, thumbnail_img_url: str) -> None:
         try:
             message = {
                 "operation": "place_thumbnail_img_url",
@@ -56,18 +94,25 @@ class Redis:
 
             kafka_producer.produce(
                 topic="redis.place_thumbnail_img_url",
+                key=str(session_key).encode("utf-8"),
                 value=json.dumps(message).encode("utf-8"),
             )
 
-            kafka_producer.flush()
+            remaining_messages = kafka_producer.flush(timeout=15)
 
-            return True
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("place_thumbnail_img_url", remaining_messages)
+
+            return
         
-        except Exception:
-            return False
+        except KafkaProduceDeliveryError:
+            raise
+        
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("place_thumbnail_img_url", e)
 
-    @staticmethod
-    def delete_session(session_key: str) -> bool:
+    @classmethod
+    def delete_session(cls, session_key: str) -> None:
         try:
             message = {
                 "operation": "delete_session",
@@ -76,18 +121,25 @@ class Redis:
 
             kafka_producer.produce(
                 topic="redis.delete_session",
+                key=str(session_key).encode("utf-8"),
                 value=json.dumps(message).encode("utf-8"),
             )
 
-            kafka_producer.flush()
+            remaining_messages = kafka_producer.flush(timeout=15)
 
-            return True
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("delete_session", remaining_messages)
 
-        except Exception:
-            return False
+            return
+
+        except KafkaProduceDeliveryError:
+            raise
         
-    @staticmethod
-    def add_otp(otp: int, email: str) -> bool:
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("delete_session", e)
+        
+    @classmethod
+    def add_otp(cls, otp: int, email: str) -> None:
         try:
             message = {
                 "operation": "add_otp",
@@ -97,15 +149,22 @@ class Redis:
 
             kafka_producer.produce(
                 topic="redis.add_otp",
+                key=str(email).encode("utf-8"),
                 value=json.dumps(message).encode("utf-8"),
             )
 
-            kafka_producer.flush()
+            remaining_messages = kafka_producer.flush(timeout=15)
 
-            return True
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("add_otp", remaining_messages)
+
+            return
         
-        except Exception:
-            return False
+        except KafkaProduceDeliveryError:
+            raise
+        
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("add_otp", e)
         
     @staticmethod
     def verify_otp(user_otp: int, email: str) -> bool:
@@ -117,6 +176,8 @@ class Redis:
             
             return True
             
-        except Exception:
-            return False
-    
+        except Exception as e:
+            error_message = f"Failed to verify OTP in verify_otp: {e}"
+            
+            app.state.logger.log_error(error_message)
+            raise RedisError(error_message) from e

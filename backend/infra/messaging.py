@@ -5,7 +5,23 @@ import time
 from confluent_kafka import Producer, Consumer
 from dotenv import load_dotenv
 
+from ..app import app
 from ..config.config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
+
+class KafkaConsumeError(Exception):
+    "Exception for Kafka consume operations"
+    pass
+class KafkaMessageError(Exception):
+    "Exception for Kafka operations"
+    pass
+
+class KafkaMessageProcessError(KafkaMessageError):
+    "Exception for Kafka message processing operations"
+    pass
+
+class KafkaMessageOperationError(KafkaMessageError):
+    "Exception for Kafka message operations"
+    pass
 
 load_dotenv()
 env = os.getenv
@@ -43,8 +59,8 @@ kafka_consumer.subscribe([
     "mongodb.delete_img_tags_and_captions",
 ])
 
-BATCH_SIZE = 100
-REQ_PER_SECOND = 200
+BATCH_SIZE = 150
+REQ_PER_SECOND = 250
 SECONDS_PER_BATCH = BATCH_SIZE / REQ_PER_SECOND
 
 stop_event = None
@@ -54,8 +70,10 @@ def process_batch(messages: list):
     
     for record in messages:
         if record.error():
-            # Once backend is completed, add log here
-            continue
+            error_message = f"Error in consumed Kafka message: {record.error()}"
+            
+            app.state.logger.log_error(error_message)
+            raise KafkaMessageError(error_message) from record.error()
         
         try:
             record_msg = json.loads(record.value().decode("utf-8"))
@@ -129,15 +147,22 @@ def process_batch(messages: list):
                     MONGO_COLLECTION.delete_one({ "s3_key": s3_key })
                     
                 case _:
-                    # Once backend is completed, add log here
-                    continue
-            
+                    error_message = f"Invalid Kafka message operation: {record_msg['operation']}"
+                    
+                    app.state.logger.log_error(error_message)
+                    raise KafkaMessageOperationError(error_message)
+
             success_messages.append(record)
         
+        except KafkaMessageOperationError:
+            raise
+
         except Exception as e:
-            # Once backend is completed, add log here
-            continue
-        
+            error_message = f"Failed to process Kafka message logic: {e}"
+
+            app.state.logger.log_error(error_message)
+            raise KafkaMessageProcessError(error_message) from e
+            
     return True if success_messages else False
 
 def run_consumer(event):
@@ -162,6 +187,8 @@ def run_consumer(event):
             time.sleep(max(0.0, SECONDS_PER_BATCH - elapsed_time))
 
         except Exception as e:
-            # Once backend is completed, add log here
-            time.sleep(1.0)
-            continue
+            error_message = f"Failed to consume messages to Kafka: {e}"
+
+            app.state.logger.log_error(error_message)
+            raise KafkaConsumeError(error_message) from e
+
