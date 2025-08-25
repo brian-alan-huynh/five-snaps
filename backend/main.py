@@ -1,18 +1,15 @@
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, Depends
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import RedirectResponse, ORJSONResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-
 from pydantic import BaseModel, Field
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-
 from fastapi_csrf_protect import CsrfProtect
 
 from routers import auth, snap, user
@@ -29,9 +26,11 @@ limiter = Limiter(
     default_limits=[settings.rate_slowapi_limiter],
 )
 
+# Pydantic models
 class RootWithThumbnail(BaseModel):
     greeting_message: str
     thumbnail_img_url: str
+    session_created_at: str
 
 class RootNoThumbnail(BaseModel):
     greeting_message: str
@@ -45,10 +44,19 @@ class CsrfSettings(BaseModel):
     cookie_secure: bool = settings.csrf_cookie_secure
     token_location: str = settings.csrf_token_location
     
+    
 @CsrfProtect.load_config
 def get_csrf_config() -> CsrfSettings:
     return CsrfSettings()
+class CsrfTokenOut(BaseModel):
+    csrf_token = Field(..., description="Send this in a 'X-CSRF-Token' header")
+    
+# Error handling
+class RootError(Exception):
+    "Exception for root operations"
+    pass
 
+# Server configs and root logic
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     rds = RDS()
@@ -105,13 +113,10 @@ app.include_router(user.router, prefix="/api/v1")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-class CsrfTokenOut(BaseModel):
-    csrf_token = Field(..., description="Send this in a 'X-CSRF-Token' header")
-
 @app.get("/", response_model=RootResponse)
-@limiter.limit("35/minute")
+@limiter.limit("40/minute")
 async def root(request: Request, csrf_protect: CsrfProtect = Depends()):
-    await csrf_protect.validate_csrf_tokens(request)
+    await csrf_protect.validate_csrf(request)
     
     try:
         session_key = request.cookies.get("session_key")
@@ -126,6 +131,7 @@ async def root(request: Request, csrf_protect: CsrfProtect = Depends()):
         
         first_name = app.state.rds.read_user(session["user_id"])["first_name"].title()
         thumbnail_img_url = session["thumbnail_img_url"]
+        created_at = session["created_at"]
 
         if not thumbnail_img_url:
             return RootNoThumbnail(
@@ -136,19 +142,22 @@ async def root(request: Request, csrf_protect: CsrfProtect = Depends()):
         return RootWithThumbnail(
             greeting_message=f"{random_greeting()}, {first_name}!",
             thumbnail_img_url=thumbnail_img_url,
+            session_created_at=created_at,
         )
     
     except Exception as e:
-        app.state.logging.log_error(f"{e} error in route '/'")
-        return RedirectResponse(url="http://localhost:3000/error?where=root", status_code=500)
+        error_message = f"Failed to perform root operation: {e}"
+    
+        app.state.logger.log_error(error_message)
+        raise RootError(error_message) from e
     
 @app.get("/csrf", response_model=CsrfTokenOut)
 @limiter.limit("20/minute")
 async def issue_csrf(csrf_protect: CsrfProtect = Depends()):
-    csrf_token, signed = csrf_protect.generate_csrf_tokens()
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
     
-    res = JSONResponse({ "csrf_token": csrf_token })
-    csrf_protect.set_csrf_cookie(signed, res)
+    res = JSONResponse(content={ "csrf_token": csrf_token })
+    csrf_protect.set_csrf_cookie(signed_token, res)
     
     return res
 
@@ -177,5 +186,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
-        # Use uvicorn[standard] in prod
     )
