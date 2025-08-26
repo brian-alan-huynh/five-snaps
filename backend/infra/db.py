@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from typing import Optional
 
-from ..main import app
+from backend.main import app
 
 class RDSOperationError(Exception):
     "Exception for RDS operations"

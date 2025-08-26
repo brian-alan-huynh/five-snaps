@@ -8,9 +8,9 @@ from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from fastapi import UploadFile
 
-from .messaging import kafka_producer
-from ..app import app
-from ..config.config import S3_CLIENT, BUCKET_NAME
+from messaging import kafka_producer
+from backend.main import app
+from backend.config.config import S3_CLIENT, BUCKET_NAME
 
 class S3Error(Exception):
     "Exception for S3 operations"
@@ -35,9 +35,20 @@ class S3:
     @staticmethod
     def _raise_client_operation_error(func_name: str, error: Exception) -> None:
         error_message = f"Failed to perform operation on S3 in {func_name}: {error}"
-        
         app.state.logger.log_error(error_message)
         raise S3Error(error_message) from error
+    
+    @staticmethod
+    def _raise_kafka_message_delivery_failure(func_name: str, remaining_messages: int) -> None:
+        error_message = f"Failed to deliver message to Kafka in {func_name}: {remaining_messages} messages (within 15 seconds)"
+        app.state.logger.log_error(error_message)
+        raise KafkaProduceDeliveryError(error_message)
+    
+    @staticmethod
+    def _raise_kafka_message_produce_failure(func_name: str, error: Exception) -> None:
+        error_message = f"Failed to produce message to Kafka in {func_name}: {error}"
+        app.state.logger.log_error(error_message)
+        raise KafkaProduceOperationError(error_message) from error
     
     @staticmethod
     def _generate_s3_key(user_id: int, filename: str) -> str:
@@ -121,8 +132,8 @@ class S3:
         except ClientError as e:
             cls._raise_client_operation_error("get_snap_count", e)
 
-    @staticmethod
-    def delete_snap(s3_key: str) -> None:
+    @classmethod
+    def delete_snap(cls, s3_key: str) -> None:
         try:
             message = {
                 "operation": "delete_snap",
@@ -138,10 +149,7 @@ class S3:
             remaining_messages = kafka_producer.flush(timeout=15)
             
             if remaining_messages > 0:
-                error_message = f"Failed to deliver message to Kafka in delete_snap: {remaining_messages} messages (within 15 seconds)"
-                
-                app.state.logger.log_error(error_message)
-                raise KafkaProduceDeliveryError(error_message)
+                cls._raise_kafka_message_delivery_failure("delete_snap", remaining_messages)
             
             return
 
@@ -149,7 +157,31 @@ class S3:
             raise
 
         except Exception as e:
-            error_message = f"Failed to produce message to Kafka in delete_snap: {e}"
+            cls._raise_kafka_message_produce_failure("delete_snap", e)
+        
+    @classmethod
+    def delete_all_snaps(cls, user_id: int) -> None:
+        try:
+            message = {
+                "operation": "delete_all_snaps",
+                "user_id": user_id,
+            }
+
+            kafka_producer.produce(
+                topic="s3.delete_all_snaps",
+                key=str(user_id).encode("utf-8"),
+                value=json.dumps(message).encode("utf-8"),
+            )
             
-            app.state.logger.log_error(error_message)
-            raise KafkaProduceOperationError(error_message) from e
+            remaining_messages = kafka_producer.flush(timeout=15)
+            
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("delete_all_snaps", remaining_messages)
+            
+            return
+
+        except KafkaProduceDeliveryError:
+            raise
+
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("delete_all_snaps", e)

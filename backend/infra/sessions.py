@@ -5,9 +5,9 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from .messaging import kafka_producer
-from ..app import app
-from ..config.config import REDIS_CLIENT
+from messaging import kafka_producer
+from backend.main import app
+from backend.config.config import REDIS_CLIENT
 
 class RedisError(Exception):
     "Exception for Redis operations"

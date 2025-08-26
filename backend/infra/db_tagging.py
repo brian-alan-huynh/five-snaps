@@ -1,9 +1,9 @@
 import json
 from datetime import datetime
 
-from .messaging import kafka_producer
-from ..main import app
-from ..config.config import MONGO_COLLECTION
+from messaging import kafka_producer
+from backend.main import app
+from backend.config.config import MONGO_COLLECTION
 
 class MongoDBError(Exception):
     "Exception for MongoDB operations"
@@ -129,3 +129,30 @@ class MongoDB:
         
         except Exception as e:
             cls._raise_kafka_message_produce_failure("delete_img_tags_and_captions", e)
+    
+    @classmethod
+    def delete_all_user_img_tags_and_captions(cls, user_id: int) -> None:
+        try:
+            message = {
+                "operation": "delete_all_user_img_tags_and_captions",
+                "user_id": user_id,
+            }
+            
+            kafka_producer.produce(
+                topic="mongodb.delete_all_user_img_tags_and_captions",
+                key=str(user_id).encode("utf-8"),
+                value=json.dumps(message).encode("utf-8"),
+            )
+            
+            remaining_messages = kafka_producer.flush(timeout=15)
+            
+            if remaining_messages > 0:
+                cls._raise_kafka_message_delivery_failure("delete_all_user_img_tags_and_captions", remaining_messages)
+            
+            return
+        
+        except KafkaProduceDeliveryError:
+            raise
+        
+        except Exception as e:
+            cls._raise_kafka_message_produce_failure("delete_all_user_img_tags_and_captions", e)

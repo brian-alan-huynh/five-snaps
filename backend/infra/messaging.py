@@ -5,8 +5,8 @@ import time
 from confluent_kafka import Producer, Consumer
 from dotenv import load_dotenv
 
-from ..app import app
-from ..config.config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
+from backend.main import app
+from backend.config.config import S3_CLIENT, BUCKET_NAME, REDIS_CLIENT, MONGO_COLLECTION
 
 class KafkaConsumeError(Exception):
     "Exception for Kafka consume operations"
@@ -22,6 +22,27 @@ class KafkaMessageProcessError(KafkaMessageError):
 class KafkaMessageOperationError(KafkaMessageError):
     "Exception for Kafka message operations"
     pass
+
+
+def _raise_kafka_consume_error(error: Exception) -> None:
+    error_message = f"Failed to consume messages to Kafka: {error}"
+    app.state.logger.log_error(error_message)
+    raise KafkaConsumeError(error_message) from error
+
+def _raise_kafka_message_error(error: Exception) -> None:
+    error_message = f"Error in consumed Kafka message: {error}"
+    app.state.logger.log_error(error_message)
+    raise KafkaMessageError(error_message) from error
+
+def _raise_kafka_message_process_error(error: Exception) -> None:
+    error_message = f"Failed to process Kafka message logic: {error}"
+    app.state.logger.log_error(error_message)
+    raise KafkaMessageProcessError(error_message) from error
+
+def _raise_kafka_message_operation_error(operation: str) -> None:
+    error_message = f"Invalid Kafka message operation: {operation}"
+    app.state.logger.log_error(error_message)
+    raise KafkaMessageOperationError(error_message)
 
 load_dotenv()
 env = os.getenv
@@ -50,6 +71,7 @@ kafka_consumer = Consumer({
 
 kafka_consumer.subscribe([
     "s3.delete_snap",
+    "s3.delete_all_snaps",
     "redis.add_new_session",
     "redis.place_thumbnail_img_url",
     "redis.delete_session",
@@ -57,6 +79,7 @@ kafka_consumer.subscribe([
     "mongodb.add_img_tags",
     "mongodb.write_img_caption",
     "mongodb.delete_img_tags_and_captions",
+    "mongodb.delete_all_user_img_tags_and_captions",
 ])
 
 BATCH_SIZE = 150
@@ -70,10 +93,7 @@ def process_batch(messages: list):
     
     for record in messages:
         if record.error():
-            error_message = f"Error in consumed Kafka message: {record.error()}"
-            
-            app.state.logger.log_error(error_message)
-            raise KafkaMessageError(error_message) from record.error()
+            _raise_kafka_message_error(record.error())
         
         try:
             record_msg = json.loads(record.value().decode("utf-8"))
@@ -86,6 +106,21 @@ def process_batch(messages: list):
                     S3_CLIENT.delete_object(
                         Bucket=BUCKET_NAME,
                         Key=s3_key
+                    )
+                    
+                case "delete_all_snaps":
+                    user_id = record_msg["user_id"]
+                    
+                    objects_to_delete = []
+                    
+                    response = S3_CLIENT.list_objects_v2(Bucket=BUCKET_NAME, Prefix=str(user_id))
+                    
+                    for object in response["Contents"]:
+                        objects_to_delete.append({ "Key": object["Key"] })
+                    
+                    S3_CLIENT.delete_objects(
+                        Bucket=BUCKET_NAME,
+                        Delete={ "Objects": objects_to_delete }
                     )
                 
                 case "add_new_session":
@@ -146,11 +181,12 @@ def process_batch(messages: list):
                     s3_key = record_msg["s3_key"]
                     MONGO_COLLECTION.delete_one({ "s3_key": s3_key })
                     
-                case _:
-                    error_message = f"Invalid Kafka message operation: {record_msg['operation']}"
+                case "delete_all_user_img_tags_and_captions":
+                    user_id = record_msg["user_id"]
+                    MONGO_COLLECTION.delete_many({ "user_id": user_id })
                     
-                    app.state.logger.log_error(error_message)
-                    raise KafkaMessageOperationError(error_message)
+                case _:
+                    _raise_kafka_message_operation_error(operation)
 
             success_messages.append(record)
         
@@ -158,10 +194,7 @@ def process_batch(messages: list):
             raise
 
         except Exception as e:
-            error_message = f"Failed to process Kafka message logic: {e}"
-
-            app.state.logger.log_error(error_message)
-            raise KafkaMessageProcessError(error_message) from e
+            _raise_kafka_message_process_error(e)
             
     return True if success_messages else False
 
@@ -185,10 +218,10 @@ def run_consumer(event):
             
             elapsed_time = time.time() - start_time
             time.sleep(max(0.0, SECONDS_PER_BATCH - elapsed_time))
-
+            
+        except KafkaMessageError:
+            raise
+        
         except Exception as e:
-            error_message = f"Failed to consume messages to Kafka: {e}"
-
-            app.state.logger.log_error(error_message)
-            raise KafkaConsumeError(error_message) from e
+            _raise_kafka_consume_error(e)
 
