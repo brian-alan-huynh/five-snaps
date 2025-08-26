@@ -1,13 +1,14 @@
+import re
+
 from fastapi import APIRouter, Request, Response, Depends, UploadFile
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from fastapi_csrf_protect import CsrfProtect
 
-from ..main import app, limiter
-from ..infra.db_tagging import MongoDB
-from ..infra.storage import S3
-from ..infra.sessions import Redis
-from ..services.computer_vision import yolov11_detect_img_objects
+from backend.main import app, limiter
+from backend.infra.db_tagging import MongoDB
+from backend.infra.storage import S3
+from backend.infra.sessions import Redis
+from backend.services.computer_vision import yolov11_detect_img_objects
 
 router = APIRouter(
     prefix="/snap",
@@ -27,6 +28,13 @@ class AllSnapsResponse(BaseModel):
 class KeyAndCaption(BaseModel):
     s3_key: str
     caption: str = Field(..., min_length=1, max_length=300)
+    
+    @validator("caption")
+    def validate_caption(cls, v):
+        if not bool(re.fullmatch(r'^[A-Za-z0-9\s\.!\?\(\)\[\]@&%\^#\:;\+=\-_]+$', v)):
+            raise ValueError("Caption can only contain letters, numbers, spaces, and special characters")
+        
+        return v.strip()
 
 # Error handling
 class SnapError(Exception):
