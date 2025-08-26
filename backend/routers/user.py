@@ -1,13 +1,13 @@
 from typing import Optional
 
 from fastapi import APIRouter, Request, Response, Depends
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from fastapi_csrf_protect import CsrfProtect
 
-from ..main import app, limiter
-from ..infra.storage import S3
-from ..infra.sessions import Redis
+from backend.main import app, limiter
+from backend.infra.db_tagging import MongoDB
+from backend.infra.storage import S3
+from backend.infra.sessions import Redis
 
 router = APIRouter(
     prefix="/user",
@@ -45,7 +45,6 @@ class UserError(Exception):
     
 def _raise_user_operation_error(func_name: str, error: Exception) -> None:
     error_message = f"Failed to perform user operation in {func_name}: {error}"
-    
     app.state.logger.log_error(error_message)
     raise UserError(error_message) from error
 
@@ -121,6 +120,8 @@ async def delete(
         app.state.rds.delete_user(user_id)
         Redis.delete_session(session_key)
         response.delete_cookie("session_key")
+        S3.delete_all_snaps(user_id)
+        MongoDB.delete_all_user_img_tags_and_captions(user_id)
         
         return Response(status_code=200, content="Account deleted successfully")
     
