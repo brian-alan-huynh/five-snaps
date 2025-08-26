@@ -121,8 +121,8 @@ class S3:
         except ClientError as e:
             cls._raise_client_operation_error("get_snap_count", e)
 
-    @classmethod
-    def delete_snap(cls, s3_key: str) -> None:
+    @staticmethod
+    def delete_snap(s3_key: str) -> None:
         try:
             message = {
                 "operation": "delete_snap",
