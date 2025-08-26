@@ -11,10 +11,10 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field, validator
 from fastapi_csrf_protect import CsrfProtect
 
-from ..main import app, limiter
-from ..infra.sessions import Redis
-from ..infra.oauth import oauth
-from ..utils.login import update_thumbnail, signup_or_login_oauth, redirect_and_set_cookie
+from backend.main import app, limiter
+from backend.infra.sessions import Redis
+from backend.infra.oauth import oauth
+from backend.utils.login import update_thumbnail, signup_or_login_oauth, redirect_and_set_cookie
 
 load_dotenv()
 env = os.getenv
