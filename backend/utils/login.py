@@ -1,7 +1,7 @@
-from ..main import app
-from ..routers.auth import _raise_auth_operation_error
-from ..infra.sessions import Redis
-from ..infra.storage import S3
+from backend.main import app
+from backend.routers.auth import _raise_auth_operation_error
+from backend.infra.sessions import Redis
+from backend.infra.storage import S3
 
 def update_thumbnail(user_id: int, session_key: str) -> None:
     most_recent_snap = S3.read_newest_snap(user_id)
