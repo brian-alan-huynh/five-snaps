@@ -1,9 +1,6 @@
-import os
 import json
 import uuid
 from datetime import datetime
-
-from dotenv import load_dotenv
 
 from messaging import kafka_producer
 from backend.main import app
@@ -20,9 +17,6 @@ class KafkaProduceDeliveryError(RedisError):
 class KafkaProduceOperationError(RedisError):
     "Exception for Kafka producer operations"
     pass
-
-load_dotenv()
-env = os.getenv
 
 class Redis:
     @staticmethod
