@@ -5,7 +5,7 @@ import requests as req
 from dotenv import load_dotenv
 from fastapi import UploadFile
 
-from ..app import app
+from backend.main import app
 
 class YOLOv11Error(Exception):
     "Exception for YOLOv11 operations"
