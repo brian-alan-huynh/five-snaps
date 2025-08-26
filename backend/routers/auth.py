@@ -1,5 +1,6 @@
 import os
 import smtplib
+import string
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -7,7 +8,7 @@ import pyotp
 from dotenv import load_dotenv
 from fastapi import APIRouter, Request, Response, Depends
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, validator
 from fastapi_csrf_protect import CsrfProtect
 
 from ..main import app, limiter
@@ -21,31 +22,61 @@ env = os.getenv
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],
-    responses={ 401: { "description": "Unauthorized" } },
+    responses={
+        401: { "description": "Unauthorized" },
+        429: { "description": "Too many requests" },
+        500: { "description": "Internal server error" },
+    },
 )
 
 # Pydantic models
-class RequestOtpCreds(BaseModel):
-    first_name: str = Field(..., min_length=1, max_length=50)
-    email: EmailStr
-    
-class VerifyOtpCreds(BaseModel):
-    email: EmailStr
-    user_otp: int
-
-class SignupCreds(BaseModel):
-    first_name: str = Field(..., min_length=1, max_length=50)
-    username: str = Field(..., min_length=1, max_length=50)
+class RequestOtpAndSignupCreds(BaseModel):
+    first_name: str = Field(..., min_length=2, max_length=50, strip_whitespace=True)
+    username: str = Field(..., min_length=4, max_length=50, strip_whitespace=True)
     password: str = Field(..., min_length=8, max_length=50)
     email: EmailStr
     
+    @validator("first_name")
+    def validate_first_name(cls, v):
+        if not v.replace(" ", "").isalpha():
+            raise ValueError("First name must contain only letters and spaces")
+
+        return v.strip().title()
+    
+    @validator("username")
+    def validate_username(cls, v):
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username must contain only letters, hyphens, and underscores")
+
+        return v.strip().lower()
+    
+    @validator("password")
+    def validate_password(cls, v):
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        
+        if not any(c in string.punctuation for c in v):
+            raise ValueError("Password must contain at least one special character")
+        
+        return v
+
+class VerifyOtpCreds(BaseModel):
+    email: EmailStr
+    user_otp: int = Field(..., ge=100000, le=999999)
+
 class ValidateAndLoginCreds(BaseModel):
-    username_or_email: str | EmailStr
-    password: str
+    username_or_email: str = Field(..., min_length=4, max_length=50, strip_whitespace=True) | EmailStr
+    password: str = Field(..., min_length=8, max_length=50)
     
 class ValidateResponse(BaseModel):
     email: EmailStr
-    first_name: str
+    first_name: str = Field(..., min_length=2, max_length=50, strip_whitespace=True)
     
 # Error handling
 class AuthError(Exception):
@@ -143,7 +174,7 @@ async def apple_auth(request: Request):
 @router.post("/request-otp")
 @limiter.limit("5/minute")
 async def request_otp(
-    creds: RequestOtpCreds, 
+    creds: RequestOtpAndSignupCreds, 
     request: Request, 
     csrf_protect: CsrfProtect = Depends()
 ):
@@ -194,7 +225,7 @@ async def request_otp(
         Redis.add_otp(int(otp), email)
             
         return Response(status_code=200)
-    
+
     except Exception as e:
         _raise_auth_operation_error("request_otp", e)
 
@@ -224,7 +255,7 @@ async def verify_otp(
 @router.post("/signup")
 @limiter.limit("5/minute")
 async def signup(
-    creds: SignupCreds,
+    creds: RequestOtpAndSignupCreds,
     request: Request, 
     csrf_protect: CsrfProtect = Depends()
 ):
