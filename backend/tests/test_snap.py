@@ -61,7 +61,7 @@ class TestGetAllSnaps:
             "caption": "Test caption"
         }]
         
-        response = client.get("/snap/all")
+        response = client.get("/api/v1/snap/all")
         assert response.status_code == 200
         
         data = response.json()
@@ -75,7 +75,7 @@ class TestGetAllSnaps:
         client.cookies.set("session_key", "test_session")
         mock_redis.get_session.side_effect = Exception("Redis error")
         
-        response = client.get("/snap/all")
+        response = client.get("/api/v1/snap/all")
         assert response.status_code == 500
 
 class TestUploadSnap:
@@ -90,7 +90,7 @@ class TestUploadSnap:
         mock_s3.upload_snap.return_value = ("https://example.com/image.jpg", "test_s3_key")
         mock_yolo.return_value = ["person", "outdoor"]
         
-        response = client.post("/snap/upload", files={"img_file": ("test.jpg", mock_upload_file.file, "image/jpeg")})
+        response = client.post("/api/v1/snap/upload", files={"img_file": ("test.jpg", mock_upload_file.file, "image/jpeg")})
         assert response.status_code == 200
         
         mock_s3.upload_snap.assert_called_once()
@@ -102,20 +102,20 @@ class TestUploadSnap:
         client.cookies.set("session_key", "test_session")
         mock_redis.get_session.side_effect = Exception("Redis error")
         
-        response = client.post("/snap/upload", files={"img_file": ("test.jpg", mock_upload_file.file, "image/jpeg")})
+        response = client.post("/api/v1/snap/upload", files={"img_file": ("test.jpg", mock_upload_file.file, "image/jpeg")})
         assert response.status_code == 500
 
 class TestCaptionSnap:
     @patch("backend.infra.db_tagging.MongoDB")
     def test_caption_post_success(self, mock_mongo, mock_csrf, valid_caption_data):
-        response = client.post("/snap/caption", json=valid_caption_data)
+        response = client.post("/api/v1/snap/caption", json=valid_caption_data)
         assert response.status_code == 200
         
         mock_mongo.write_img_caption.assert_called_with("test_s3_key", "This is a test caption")
 
     @patch("backend.infra.db_tagging.MongoDB")
     def test_caption_put_success(self, mock_mongo, mock_csrf, valid_caption_data):
-        response = client.put("/snap/caption", json=valid_caption_data)
+        response = client.put("/api/v1/snap/caption", json=valid_caption_data)
         assert response.status_code == 200
         
         mock_mongo.write_img_caption.assert_called_with("test_s3_key", "This is a test caption")
@@ -124,14 +124,14 @@ class TestCaptionSnap:
     def test_caption_exception(self, mock_mongo, mock_csrf, valid_caption_data):
         mock_mongo.write_img_caption.side_effect = Exception("MongoDB error")
         
-        response = client.post("/snap/caption", json=valid_caption_data)
+        response = client.post("/api/v1/snap/caption", json=valid_caption_data)
         assert response.status_code == 500
 
 class TestDeleteSnap:
     @patch("backend.infra.db_tagging.MongoDB")
     @patch("backend.infra.storage.S3")
     def test_delete_single_success(self, mock_s3, mock_mongo, mock_csrf):
-        response = client.delete("/snap/single?s3_key=test_key")
+        response = client.delete("/api/v1/snap/single?s3_key=test_key")
         assert response.status_code == 200
         
         mock_s3.delete_snap.assert_called_with("test_key")
@@ -141,12 +141,12 @@ class TestDeleteSnap:
     def test_delete_single_exception(self, mock_s3, mock_csrf):
         mock_s3.delete_snap.side_effect = Exception("S3 error")
         
-        response = client.delete("/snap/single?s3_key=test_key")
+        response = client.delete("/api/v1/snap/single?s3_key=test_key")
         assert response.status_code == 500
 
 class TestValidation:
     def test_invalid_caption_empty(self, mock_csrf):
-        response = client.post("/snap/caption", json={
+        response = client.post("/api/v1/snap/caption", json={
             "s3_key": "test_key",
             "caption": ""
         })
@@ -154,14 +154,14 @@ class TestValidation:
 
     def test_invalid_caption_too_long(self, mock_csrf):
         long_caption = "a" * 301
-        response = client.post("/snap/caption", json={
+        response = client.post("/api/v1/snap/caption", json={
             "s3_key": "test_key",
             "caption": long_caption
         })
         assert response.status_code == 422
 
     def test_invalid_caption_special_chars(self, mock_csrf):
-        response = client.post("/snap/caption", json={
+        response = client.post("/api/v1/snap/caption", json={
             "s3_key": "test_key",
             "caption": "Invalid <script> caption"
         })
@@ -169,7 +169,7 @@ class TestValidation:
 
     def test_valid_caption_with_allowed_chars(self, mock_csrf):
         with patch("backend.infra.db_tagging.MongoDB"):
-            response = client.post("/snap/caption", json={
+            response = client.post("/api/v1/snap/caption", json={
                 "s3_key": "test_key",
                 "caption": "Valid caption with 123 & @symbols!"
             })
@@ -184,7 +184,7 @@ class TestRateLimiting:
             
             # Simulate rate limit exceeded
             for _ in range(31):
-                response = client.get("/snap/all")
+                response = client.get("/api/v1/snap/all")
             
             # Should eventually hit rate limit
             assert response.status_code in [200, 429]
@@ -195,7 +195,7 @@ class TestErrorHandling:
         client.cookies.set("session_key", "test_session")
         mock_redis.get_session.side_effect = Exception("Test error")
         
-        client.get("/snap/all")
+        client.get("/api/v1/snap/all")
         
         app.state.logger.log_error.assert_called_once()
         error_call = app.state.logger.log_error.call_args[0][0]
