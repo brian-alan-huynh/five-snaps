@@ -43,8 +43,7 @@ class CsrfSettings(BaseModel):
     cookie_samesite: str = settings.csrf_cookie_samesite
     cookie_secure: bool = settings.csrf_cookie_secure
     token_location: str = settings.csrf_token_location
-    
-    
+
 @CsrfProtect.load_config
 def get_csrf_config() -> CsrfSettings:
     return CsrfSettings()

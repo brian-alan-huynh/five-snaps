@@ -5,6 +5,14 @@ from ..main import app
 
 client = TestClient(app)
 
+@pytest.fixture
+def get_csrf_token_and_cookie() -> tuple[str, dict[str, str]]:
+    res = client.get("/csrf")
+    token = res.json()["csrf_token"]
+    cookies = res.cookies
+    
+    return token, cookies
+
 def test_health_ok():
     res = client.get("/health")
     assert res.status_code == 200
@@ -21,10 +29,8 @@ def test_csrf_issue_and_cookie():
     names = ";".join(cookies.keys())
     assert "fastapi-csrf-token" in names
 
-def test_root_redirect_with_csrf_and_without_session():
-    res_csrf = client.get("/csrf")
-    token = res_csrf.json()["csrf_token"]
-    cookies = res_csrf.cookies
+def test_root_redirect_with_csrf_and_without_session(get_csrf_token_and_cookie):
+    token, cookies = get_csrf_token_and_cookie
     
     res_root = client.get(
         "/",
@@ -36,11 +42,9 @@ def test_root_redirect_with_csrf_and_without_session():
     assert res_root.status_code in (302, 500)
     assert "login" in res_root.headers["Location"]
     
-def test_rate_limit_on_root():
-    res_csrf = client.get("/csrf")
-    token = res_csrf.json()["csrf_token"]
-    cookies = res_csrf.cookies
-    
+def test_rate_limit_on_root(get_csrf_token_and_cookie):
+    token, cookies = get_csrf_token_and_cookie
+
     current_call = None
     
     for _ in range(36):
