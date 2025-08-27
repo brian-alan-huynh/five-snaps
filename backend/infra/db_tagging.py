@@ -21,14 +21,12 @@ class MongoDB:
     @staticmethod
     def _raise_kafka_message_delivery_failure(func_name: str, remaining_messages: int) -> None:
         error_message = f"Failed to deliver message to Kafka in {func_name}: {remaining_messages} messages (within 15 seconds)"
-        
         app.state.logger.log_error(error_message)
         raise KafkaProduceDeliveryError(error_message)
     
     @staticmethod
     def _raise_kafka_message_produce_failure(func_name: str, error: Exception) -> None:
         error_message = f"Failed to produce message to Kafka in {func_name}: {error}"
-        
         app.state.logger.log_error(error_message)
         raise KafkaProduceOperationError(error_message) from error
     

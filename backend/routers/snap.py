@@ -43,7 +43,6 @@ class SnapError(Exception):
     
 def _raise_snap_operation_error(func_name: str, error: Exception) -> None:
     error_message = f"Failed to perform snap operation in {func_name}: {error}"
-    
     app.state.logger.log_error(error_message)
     raise SnapError(error_message) from error
 

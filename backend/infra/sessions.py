@@ -20,16 +20,20 @@ class KafkaProduceOperationError(RedisError):
 
 class Redis:
     @staticmethod
+    def _raise_redis_operation_failure(func_name: str, error: Exception) -> None:
+        error_message = f"Failed to perform Redis operation in {func_name}: {error}"
+        app.state.logger.log_error(error_message)
+        raise RedisError(error_message) from error
+    
+    @staticmethod
     def _raise_kafka_message_delivery_failure(func_name: str, remaining_messages: int) -> None:
         error_message = f"Failed to deliver message to Kafka in {func_name}: {remaining_messages} messages (within 15 seconds)"
-        
         app.state.logger.log_error(error_message)
         raise KafkaProduceDeliveryError(error_message)
     
     @staticmethod
     def _raise_kafka_message_produce_failure(func_name: str, error: Exception) -> None:
         error_message = f"Failed to produce message to Kafka in {func_name}: {error}"
-        
         app.state.logger.log_error(error_message)
         raise KafkaProduceOperationError(error_message) from error
     
@@ -66,16 +70,13 @@ class Redis:
         except Exception as e:
             cls._raise_kafka_message_produce_failure("add_new_session", e)
 
-    @staticmethod
-    def get_session(session_key: str) -> dict | list:
+    @classmethod
+    def get_session(cls, session_key: str) -> dict | list:
         try:
             return REDIS_CLIENT.hgetall(session_key)
         
         except Exception as e:
-            error_message = f"Failed to get session from Redis in get_session: {e}"
-            
-            app.state.logger.log_error(error_message)
-            raise RedisError(error_message) from e
+            cls._raise_redis_operation_failure("get_session", e)
         
     @classmethod
     def place_thumbnail_img_url(cls, session_key: str, thumbnail_img_url: str) -> None:
@@ -160,8 +161,8 @@ class Redis:
         except Exception as e:
             cls._raise_kafka_message_produce_failure("add_otp", e)
         
-    @staticmethod
-    def verify_otp(user_otp: int, email: str) -> bool:
+    @classmethod
+    def verify_otp(cls, user_otp: int, email: str) -> bool:
         try:
             otp = REDIS_CLIENT.get(email)
             
@@ -171,7 +172,4 @@ class Redis:
             return True
             
         except Exception as e:
-            error_message = f"Failed to verify OTP in verify_otp: {e}"
-            
-            app.state.logger.log_error(error_message)
-            raise RedisError(error_message) from e
+            cls._raise_redis_operation_failure("verify_otp", e)

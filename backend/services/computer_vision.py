@@ -14,13 +14,11 @@ class YOLOv11Error(Exception):
 def yolov11_error_handler(error: Exception = None) -> None:
     if error:
         error_message = f"Failed to perform YOLOv11 detection in yolov11_detect_img_objects: {error}"
-
         app.state.logger.log_error(error_message)
         raise YOLOv11Error(error_message) from error
 
     else:
         error_message = "Failed to perform YOLOv11 detection in yolov11_detect_img_objects"
-
         app.state.logger.log_error(error_message)
         raise YOLOv11Error(error_message)
 
@@ -59,6 +57,9 @@ async def yolov11_detect_img_objects(img_file: UploadFile) -> list[str]:
             tags.append(obj["class"])
         
         return tags
+    
+    except YOLOv11Error:
+        raise
     
     except Exception as e:
         yolov11_error_handler(e)

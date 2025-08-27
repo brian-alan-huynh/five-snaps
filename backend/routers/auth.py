@@ -89,7 +89,6 @@ class LoginError(AuthError):
 
 def _raise_auth_operation_error(func_name: str, error: Exception) -> None:
     error_message = f"Failed to perform auth operation in {func_name}: {error}"
-    
     app.state.logger.log_error(error_message)
     raise AuthError(error_message) from error
 

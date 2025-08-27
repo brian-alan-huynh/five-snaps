@@ -54,13 +54,11 @@ class RDS:
         
     def _raise_db_fetch_failure(self, func_name: str) -> None:
         error_message = f"Failed to fetch data from RDS database in {func_name}"
-        
         app.state.logger.log_error(error_message)
         raise RDSFetchError(error_message)
         
     def _raise_db_operation_failure(self, func_name: str, error: Exception) -> None:
         error_message = f"Failed to fulfill RDS database operation in {func_name}: {error}"
-        
         app.state.logger.log_error(error_message)
         raise RDSOperationError(error_message) from error
 
