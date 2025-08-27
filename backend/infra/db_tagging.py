@@ -97,7 +97,6 @@ class MongoDB:
         
         except Exception as e:
             error_message = f"Failed to read img tags and captions from MongoDB in read_img_tags_and_captions: {e}"
-            
             app.state.logger.log_error(error_message)
             raise MongoDBError(error_message) from e
         
