@@ -21,7 +21,7 @@ class RDSFetchError(RDSOperationError):
 load_dotenv()
 env = os.getenv
 
-DATABASE_URL = f"postgresql+psycopg2://{env('AWS_RDS_USER')}:{env('AWS_RDS_PASS')}@{env('AWS_RDS_HOST')}:{env('AWS_RDS_PORT')}/{env('AWS_RDS_NAME')}"
+DATABASE_URL = f"postgresql+psycopg2://{env('AWS_RDS_USER')}:{env('AWS_RDS_PASS')}@{env('AWS_RDS_HOST')}:{env('AWS_RDS_PORT')}/{env('AWS_RDS_DATABASE_NAME')}"
 
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
