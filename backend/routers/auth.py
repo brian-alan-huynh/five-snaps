@@ -83,10 +83,6 @@ class AuthError(Exception):
     "Exception for auth operations"
     pass
 
-class LoginError(AuthError):
-    "Exception for login operations"
-    pass
-
 def _raise_auth_operation_error(func_name: str, error: Exception) -> None:
     error_message = f"Failed to perform auth operation in {func_name}: {error}"
     app.state.logger.log_error(error_message)
@@ -288,7 +284,7 @@ async def validate(
         username_or_email = creds.username_or_email
         password = creds.password
         
-        res = app.state.rds.check_or_fetch_normal_login_creds(username_or_email, password)
+        res = app.state.rds.check_normal_login_creds(username_or_email, password)
             
         if not res:
             return Response(status_code=401, content="Incorrect username or password")
@@ -311,21 +307,11 @@ async def login(
         username_or_email = creds.username_or_email
         password = creds.password
         
-        user_id = app.state.rds.check_or_fetch_normal_login_creds(username_or_email, password, is_fetch=True)
-        
-        if not user_id:
-            error_message = "Failed to perform login despite correct credentials"
-            
-            app.state.logger.log_error(error_message)
-            raise LoginError(error_message)
-
+        user_id = app.state.rds.fetch_normal_user(username_or_email, password)
         session_key = Redis.add_new_session(user_id)
         update_thumbnail(user_id, session_key)
             
         return redirect_and_set_cookie(session_key)
-    
-    except LoginError:
-        raise
 
     except Exception as e:
         _raise_auth_operation_error("login", e)

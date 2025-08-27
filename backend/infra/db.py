@@ -1,10 +1,11 @@
 import os
-from datetime import datetime
 
 import bcrypt
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import func
+from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -21,9 +22,28 @@ class RDSFetchError(RDSOperationError):
 load_dotenv()
 env = os.getenv
 
-DATABASE_URL = f"postgresql+psycopg2://{env('AWS_RDS_USER')}:{env('AWS_RDS_PASS')}@{env('AWS_RDS_HOST')}:{env('AWS_RDS_PORT')}/{env('AWS_RDS_DATABASE_NAME')}"
+def get_rds_db_url():
+    user = env("AWS_RDS_DB_USER")
+    password = env("AWS_RDS_DB_PASS")
+    host = env("AWS_RDS_DB_HOST")
+    port = env("AWS_RDS_DB_PORT")
+    db_name = env("AWS_RDS_DB_NAME")
+    
+    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}?sslmode=require"
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    get_rds_db_url(),
+    poolclass=QueuePool,
+    pool_size=25,
+    max_overflow=50,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "Snapthril Backend",
+    },
+)
+
 Base = declarative_base()
 
 class User(Base):
@@ -36,8 +56,8 @@ class User(Base):
     first_name = Column(String, nullable=False)
     oauth_provider = Column(String, nullable=True, default=None)
     oauth_provider_user_id = Column(String, nullable=True, unique=True, default=None)
-    created_at = Column(DateTime, default=datetime.now(), nullable=False)
-    last_login_at = Column(DateTime, default=datetime.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    last_login_at = Column(DateTime, default=func.now(), nullable=False)
 
 
 class UserPreferences(Base):
@@ -49,7 +69,7 @@ class UserPreferences(Base):
 
 class RDS:
     def __init__(self):
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        self.SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
         Base.metadata.create_all(bind=engine)
         
     def _raise_db_fetch_failure(self, func_name: str) -> None:
@@ -309,13 +329,7 @@ class RDS:
             db.close()
 
     # Authentication
-    def check_or_fetch_normal_login_creds(
-        self, 
-        username_or_email: str, 
-        password: str,
-        is_fetch: bool = False,
-    ) -> bool | int | dict[str, str]:
-        
+    def check_normal_login_creds(self, username_or_email: str, password: str) -> bool | dict[str, str]:
         db = self.SessionLocal()
 
         try:
@@ -330,27 +344,50 @@ class RDS:
             if not bcrypt.checkpw(password.encode("utf-8"), db_user.password.encode("utf-8")):
                 return False
             
-            if not is_fetch:
-                return {
-                    "email": db_user.email,
-                    "first_name": db_user.first_name,
-                }
-            
-            else:
-                db_user.last_login_at = datetime.now()
-
-                db.commit()
-                db.refresh(db_user)
-
-                return db_user.id
+            return {
+                "email": db_user.email,
+                "first_name": db_user.first_name,
+            }
 
         except Exception as e:
             db.rollback()
-            self._raise_db_operation_failure("check_or_fetch_normal_login_creds", e)
+            self._raise_db_operation_failure("check_normal_login_creds", e)
 
         finally:
             db.close()
+    
+    def fetch_normal_user(self, username_or_email: str, password: str) -> int:
+        db = self.SessionLocal()
+
+        try:
+            db_user = db.query(User).filter(User.username == username_or_email).first()
+
+            if not db_user:
+                db_user = db.query(User).filter(User.email == username_or_email).first()
+
+            if not db_user:
+                self._raise_db_fetch_failure("fetch_normal_user")
+
+            if not bcrypt.checkpw(password.encode("utf-8"), db_user.password.encode("utf-8")):
+                self._raise_db_fetch_failure("fetch_normal_user")
+                
+            db_user.last_login_at = func.now()
+
+            db.commit()
+            db.refresh(db_user)
             
+            return db_user.id
+        
+        except RDSFetchError:
+            raise
+        
+        except Exception as e:
+            db.rollback()
+            self._raise_db_operation_failure("fetch_normal_user", e)
+
+        finally:
+            db.close()
+    
     def check_and_fetch_oauth_login_creds(self, oauth_user_id: str) -> bool | int:
         db = self.SessionLocal()
 
@@ -360,7 +397,7 @@ class RDS:
             if not db_user:
                 return False
             
-            db_user.last_login_at = datetime.now()
+            db_user.last_login_at = func.now()
 
             db.commit()
             db.refresh(db_user)
