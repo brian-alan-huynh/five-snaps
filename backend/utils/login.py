@@ -1,7 +1,10 @@
 from backend.main import app
-from backend.routers.auth import _raise_auth_operation_error
 from backend.infra.sessions import Redis
 from backend.infra.storage import S3
+
+class OAuthError(Exception):
+    "Exception for OAuth operations"
+    pass
 
 def update_thumbnail(user_id: int, session_key: str) -> None:
     most_recent_snap = S3.read_newest_snap(user_id)
@@ -39,7 +42,9 @@ def signup_or_login_oauth(first_name: str, provider: str, oauth_user_id: int) ->
         return session_key
         
     except Exception as e:
-        _raise_auth_operation_error("signup_or_login_oauth", e)
+        error_message = f"Failed to perform OAuth operation: {e}"
+        app.state.logger.log_error(error_message)
+        raise OAuthError(error_message) from e
     
 def redirect_and_set_cookie(session_key: str) -> RedirectResponse:
     response = RedirectResponse(url="http://localhost:3000/home", status_code=302)
