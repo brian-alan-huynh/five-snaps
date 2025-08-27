@@ -1,15 +1,12 @@
-import os
-
 import bcrypt
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
-from sqlalchemy.pool import QueuePool
-from dotenv import load_dotenv
 from typing import Optional
 
 from backend.main import app
+from backend.config.config import RDS_ENGINE
 
 class RDSOperationError(Exception):
     "Exception for RDS operations"
@@ -18,31 +15,6 @@ class RDSOperationError(Exception):
 class RDSFetchError(RDSOperationError):
     "Exception for RDS fetch operations"
     pass
-
-load_dotenv()
-env = os.getenv
-
-def get_rds_db_url():
-    user = env("AWS_RDS_DB_USER")
-    password = env("AWS_RDS_DB_PASS")
-    host = env("AWS_RDS_DB_HOST")
-    port = env("AWS_RDS_DB_PORT")
-    db_name = env("AWS_RDS_DB_NAME")
-    
-    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}?sslmode=require"
-
-engine = create_engine(
-    get_rds_db_url(),
-    poolclass=QueuePool,
-    pool_size=25,
-    max_overflow=50,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-    connect_args={
-        "connect_timeout": 10,
-        "application_name": "Snapthril Backend",
-    },
-)
 
 Base = declarative_base()
 
@@ -69,8 +41,8 @@ class UserPreferences(Base):
 
 class RDS:
     def __init__(self):
-        self.SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-        Base.metadata.create_all(bind=engine)
+        self.SessionLocal = sessionmaker(bind=RDS_ENGINE, autocommit=False, autoflush=False)
+        Base.metadata.create_all(bind=RDS_ENGINE)
         
     def _raise_db_fetch_failure(self, func_name: str) -> None:
         error_message = f"Failed to fetch data from RDS database in {func_name}"

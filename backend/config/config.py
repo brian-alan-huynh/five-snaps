@@ -3,10 +3,34 @@ import os
 import boto3
 import redis
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
 from pymongo import MongoClient
 
 load_dotenv()
 env = os.getenv
+
+def get_rds_db_url():
+    user = env("AWS_RDS_DB_USER")
+    password = env("AWS_RDS_DB_PASS")
+    host = env("AWS_RDS_DB_HOST")
+    port = env("AWS_RDS_DB_PORT")
+    db_name = env("AWS_RDS_DB_NAME")
+    
+    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}?sslmode=require"
+
+RDS_ENGINE = create_engine(
+    get_rds_db_url(),
+    poolclass=QueuePool,
+    pool_size=25,
+    max_overflow=50,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "Snapthril Backend",
+    },
+)
 
 REDIS_CLIENT = redis.Redis(
     host=env("REDIS_HOST"),
