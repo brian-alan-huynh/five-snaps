@@ -89,7 +89,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
@@ -146,7 +145,6 @@ async def root(request: Request, csrf_protect: CsrfProtect = Depends()):
     
     except Exception as e:
         error_message = f"Failed to perform root operation: {e}"
-    
         app.state.logger.log_error(error_message)
         raise RootError(error_message) from e
     
