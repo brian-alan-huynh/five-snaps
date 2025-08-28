@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 load_dotenv()
 env = os.getenv
@@ -18,10 +18,3 @@ class Settings(BaseSettings):
     csrf_token_location = "header"
     
     rate_slowapi_limiter = "50/minute"
-    
-    model_config = SettingsConfigDict(
-        env_prefix="APP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
