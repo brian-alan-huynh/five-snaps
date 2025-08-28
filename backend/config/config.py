@@ -40,6 +40,7 @@ REDIS_CLIENT = redis.Redis(
     ssl=True,
     ssl_cert_reqs=None,
     ssl_ca_certs=None,
+    ssl_keyfile=None,
     decode_responses=True,
     socket_timeout=5,
     socket_connect_timeout=10,
